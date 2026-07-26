@@ -1,0 +1,1 @@
+Export/import a save file (profile, rating, and in-progress game) from the Progress panel — progress lives in this browser's storage only, so this is the way to carry it to a different browser or device.

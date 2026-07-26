@@ -117,6 +117,11 @@
   @media (max-width: 860px) {
     main { grid-template-columns: 1fr; }
   }
+  /* Manual layout preference (see #layout-mode) overrides the responsive
+     breakpoint above — "one column" always stacks regardless of width;
+     "two column" is the default grid, which still collapses on narrow
+     screens via the media query above. */
+  :root[data-layout="one"] main { grid-template-columns: 1fr; }
 
   .board-frame {
     background: linear-gradient(160deg, var(--board-dark), color-mix(in srgb, var(--board-dark) 80%, black));
@@ -303,7 +308,10 @@
       <h1>Chess vs. Stockfish</h1>
       <div class="tagline" id="tagline">The engine runs entirely in your browser.</div>
     </div>
-    <span class="status-pill you" id="status-pill"><span class="dot"></span><span id="status-text">Loading engine&hellip;</span></span>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <button id="layout-toggle" aria-label="Toggle layout" style="font-size:0.75rem; padding:5px 10px;"></button>
+      <span class="status-pill you" id="status-pill"><span class="dot"></span><span id="status-text">Loading engine&hellip;</span></span>
+    </div>
   </header>
 
   <main>
@@ -406,6 +414,12 @@
           <div class="movelist" id="recent-games" style="grid-template-columns: 1fr auto auto auto; font-size:0.75rem; margin-bottom:12px;"></div>
           <button id="btn-export-history" style="width:100%;">Copy history for coaching</button>
           <p class="hint" style="margin-top:8px;">Move-quality tags (best/good/inaccuracy/mistake/blunder) come from a background re-evaluation with this same engine after each game &mdash; an approximate, heuristic read, not a calibrated accuracy score.</p>
+          <div class="row" style="margin-top:10px;">
+            <button id="btn-export-profile" style="flex:1;">Export save file</button>
+            <button id="btn-import-profile" style="flex:1;">Import save file</button>
+          </div>
+          <input type="file" id="import-profile-file" accept="application/json" style="display:none;">
+          <p class="hint" style="margin-top:8px;">Progress lives in this browser's storage only &mdash; it doesn't follow you to a different browser or device. Export a save file here, then import it there to carry your rating and history over.</p>
         </div>
       </div>
 
@@ -561,7 +575,23 @@ __PUZZLES_SOURCE__
   const movelistEl = document.getElementById('movelist');
   const strengthEl = document.getElementById('strength');
   const colorEl = document.getElementById('player-color');
+  const layoutBtn = document.getElementById('layout-toggle');
   const toastEl = document.getElementById('toast');
+
+  // --- Layout preference (defaults to one-column; persists across visits) ---
+  const LAYOUT_KEY = 'chess-vs-stockfish:layout:v1';
+  function applyLayout(mode) {
+    const resolved = mode === 'two' ? 'two' : 'one';
+    document.documentElement.dataset.layout = resolved;
+    layoutBtn.textContent = resolved === 'one' ? '⊞ 2 columns' : '☰ 1 column';
+    layoutBtn.title = resolved === 'one' ? 'Switch to 2-column layout' : 'Switch to 1-column layout';
+  }
+  applyLayout(localStorage.getItem(LAYOUT_KEY) || 'one');
+  layoutBtn.addEventListener('click', () => {
+    const next = document.documentElement.dataset.layout === 'one' ? 'two' : 'one';
+    applyLayout(next);
+    try { localStorage.setItem(LAYOUT_KEY, next); } catch (e) {}
+  });
 
   let game = new Chess();
   let flipped = false;
@@ -1907,10 +1937,14 @@ __PUZZLES_SOURCE__
     cancelEngineWork();
     exitReview();
     unlogCurrentGame();
-    // Step back to the player's own turn: drop the engine reply (if any) and
-    // then the player's move. undo() is a no-op when there's nothing to take
-    // back, so this is safe at the very start of a game too.
-    if (game.turn() !== playerColor) game.undo();
+    // Step back to the player's own turn: if it's currently the player's
+    // turn, the engine already replied, so drop that reply first — then
+    // always drop the player's own last move. (The inverted condition this
+    // replaced landed on the engine's turn in both cases, with nothing left
+    // to prompt the engine to move — that's the freeze this fixes.) undo()
+    // is a safe no-op when there's nothing to take back, so this also works
+    // at the very start of a game.
+    if (game.turn() === playerColor) game.undo();
     game.undo();
     selected = null; legalTargets = []; gameOver = false; ratingApplied = false;
     liveAnalysis = null;
@@ -2100,6 +2134,67 @@ __PUZZLES_SOURCE__
     } catch (e) {
       toast('Copy failed — try again');
     }
+  });
+
+  // --- Export / import save file ---
+  // Everything in-browser localStorage holds (profile/rating/in-progress
+  // game) is inherently siloed to this one browser profile — a plain
+  // static page has no way to sync across browsers/devices on its own.
+  // This is the manual bridge: a JSON snapshot the user carries over.
+  const SAVE_FILE_VERSION = 1;
+
+  document.getElementById('btn-export-profile').addEventListener('click', () => {
+    const bundle = {
+      saveFileVersion: SAVE_FILE_VERSION,
+      exportedAt: new Date().toISOString(),
+      profile,
+      rating,
+      game: JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'),
+    };
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'chess-vs-stockfish-save-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Save file downloaded');
+  });
+
+  document.getElementById('btn-import-profile').addEventListener('click', () => {
+    document.getElementById('import-profile-file').click();
+  });
+
+  document.getElementById('import-profile-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+    let bundle;
+    try {
+      bundle = JSON.parse(await file.text());
+    } catch (err) {
+      toast('That file isn’t valid JSON');
+      return;
+    }
+    if (!bundle || typeof bundle !== 'object' || !Array.isArray(bundle.profile?.games) ||
+        typeof bundle.rating?.elo !== 'number') {
+      toast('That doesn’t look like a Chess vs. Stockfish save file');
+      return;
+    }
+    if (drillActive) { toast('End the drill first'); return; }
+    if (!confirm('Import this save file? It will replace your current profile, rating, and in-progress game in this browser.')) {
+      return;
+    }
+    try {
+      localStorage.setItem(PROFILE_KEY, JSON.stringify(bundle.profile));
+      localStorage.setItem(RATING_KEY, JSON.stringify(bundle.rating));
+      if (bundle.game) localStorage.setItem(STORAGE_KEY, JSON.stringify(bundle.game));
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      toast('Import failed — could not write to storage');
+      return;
+    }
+    location.reload();
   });
 
   // --- Boot ---

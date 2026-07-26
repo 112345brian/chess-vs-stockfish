@@ -1,0 +1,1 @@
+Fixed Undo freezing the game. Its logic for stepping back to your own turn had an inverted condition that landed on the engine's turn in every case, with nothing left to prompt the engine to actually move — the board just sat there unresponsive. It now correctly returns to your turn regardless of whether the engine had already replied.
