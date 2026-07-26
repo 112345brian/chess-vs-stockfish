@@ -1,0 +1,1 @@
+A "Load PGN" button next to Copy PGN, so a game can be pasted in and set as the current position — the missing counterpart to exporting, useful for e.g. picking a game back up on a different tab/device without an export/import save-file round trip.

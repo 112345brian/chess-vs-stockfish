@@ -366,6 +366,17 @@
           <button id="btn-pgn" style="flex:1;">Copy PGN</button>
         </div>
         <div class="row" style="margin-top:8px;">
+          <button id="btn-load-pgn" style="width:100%;">Load PGN&hellip;</button>
+        </div>
+        <div id="load-pgn-panel" style="display:none; margin-top:8px;">
+          <textarea id="load-pgn-text" rows="4" style="width:100%; box-sizing:border-box; font-family:var(--mono); font-size:0.75rem; padding:8px; border-radius:var(--radius); border:1px solid var(--paper-200); background:var(--paper-050); color:var(--ink-900);" placeholder="Paste a PGN here&hellip;"></textarea>
+          <div class="row" style="margin-top:6px;">
+            <button class="primary" id="btn-load-pgn-confirm" style="flex:1;">Load</button>
+            <button id="btn-load-pgn-cancel" style="flex:1;">Cancel</button>
+          </div>
+          <p class="hint" style="margin-top:6px;">Replaces the current game on this board. Doesn&rsquo;t affect your saved profile/rating.</p>
+        </div>
+        <div class="row" style="margin-top:8px;">
           <button id="btn-resign" style="flex:1;">Resign</button>
         </div>
         <div class="row" style="margin-top:8px;">
@@ -1283,7 +1294,7 @@ __PUZZLES_SOURCE__
   // while one has the board, so they can't act on the shared engine/game
   // state at the same time.
   function setDrillControlsDisabled(disabled) {
-    for (const id of ['btn-new', 'btn-undo', 'btn-resign', 'btn-analyze-so-far', 'strength', 'player-color', 'btn-drill-start', 'btn-calibrate-start']) {
+    for (const id of ['btn-new', 'btn-undo', 'btn-resign', 'btn-analyze-so-far', 'btn-load-pgn', 'strength', 'player-color', 'btn-drill-start', 'btn-calibrate-start']) {
       document.getElementById(id).disabled = disabled;
     }
   }
@@ -2072,6 +2083,51 @@ __PUZZLES_SOURCE__
     } catch (e) {
       toast('Copy failed — select the PGN manually');
     }
+  });
+
+  document.getElementById('btn-load-pgn').addEventListener('click', () => {
+    if (drillActive) { toast('End the drill first'); return; }
+    const panel = document.getElementById('load-pgn-panel');
+    panel.style.display = '';
+    document.getElementById('load-pgn-text').focus();
+  });
+
+  document.getElementById('btn-load-pgn-cancel').addEventListener('click', () => {
+    document.getElementById('load-pgn-panel').style.display = 'none';
+    document.getElementById('load-pgn-text').value = '';
+  });
+
+  document.getElementById('btn-load-pgn-confirm').addEventListener('click', () => {
+    if (analyzing || engineThinking) { toast('Wait for the current move/analysis to finish'); return; }
+    const text = document.getElementById('load-pgn-text').value.trim();
+    if (!text) { toast('Paste a PGN first'); return; }
+
+    let tmp;
+    try {
+      tmp = new Chess();
+      tmp.loadPgn(text);
+    } catch (e) {
+      toast('Could not parse that PGN');
+      return;
+    }
+
+    cancelEngineWork();
+    exitReview();
+    game = tmp;
+    selected = null;
+    legalTargets = [];
+    gameOver = false;
+    ratingApplied = false;
+    resignedAsLoss = false;
+    currentGameEntry = null;
+    liveAnalysis = null;
+    document.getElementById('load-pgn-panel').style.display = 'none';
+    document.getElementById('load-pgn-text').value = '';
+    save();
+    render();
+    checkGameOver(); // logs it immediately if the loaded PGN is already a finished game
+    if (!gameOver && game.turn() !== playerColor) requestEngineMove();
+    toast('PGN loaded');
   });
 
   document.getElementById('btn-opening-info').addEventListener('click', () => {
