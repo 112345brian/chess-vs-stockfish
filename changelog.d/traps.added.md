@@ -1,0 +1,1 @@
+Known-trap detection: a callout when your current position matches one of 24 verified opening traps (Scholar's Mate, Fried Liver Attack, Légal's Trap, Fishing Pole, and more), distinguishing "you may have just allowed this" from "it just happened," with an explanation either way.

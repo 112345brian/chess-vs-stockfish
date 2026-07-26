@@ -341,6 +341,12 @@
           </label>
         </div>
         <div class="hint" id="rating-display" style="margin-bottom:10px;"></div>
+        <button id="btn-calibrate-start" style="width:100%; margin-bottom:10px;">Calibrate my rating (6 quick puzzles)</button>
+        <div id="calibration-active" style="display:none; margin-bottom:10px; padding:10px; border-radius:var(--radius); background:var(--paper-200);">
+          <div class="hint" id="calibration-label" style="margin-bottom:6px;"></div>
+          <div id="calibration-feedback" style="min-height:2.2em; margin-bottom:8px; line-height:1.4;"></div>
+          <button class="primary" id="btn-calibrate-next" style="width:100%;" disabled>Next</button>
+        </div>
         <div class="hint" id="analysis-progress" style="margin-bottom:10px; display:none;"></div>
         <div class="row">
           <button class="primary" id="btn-new" style="flex:1;">New game</button>
@@ -363,6 +369,10 @@
         <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Opening</div>
         <div id="opening-name" style="font-family:var(--serif); font-size:0.95rem; margin-bottom:4px;">Starting position</div>
         <div class="hint" id="opening-eco"></div>
+        <div id="trap-callout" style="display:none; margin-top:10px; padding:10px; border-radius:var(--radius); background:color-mix(in srgb, var(--danger) 16%, var(--paper-200)); border:1px solid color-mix(in srgb, var(--danger) 40%, transparent);">
+          <div style="font-weight:700; color:var(--danger); margin-bottom:4px;" id="trap-name"></div>
+          <div class="hint" id="trap-description"></div>
+        </div>
         <button id="btn-opening-info" style="width:100%; margin-top:10px; display:none;">Read more &darr;</button>
         <div id="opening-info-panel" class="hint" style="margin-top:8px; display:none; line-height:1.5;"></div>
         <button id="btn-lookup" style="width:100%; margin-top:10px;">Look up in chat &rarr;</button>
@@ -397,6 +407,32 @@
           <p class="hint" style="margin-top:8px;">Move-quality tags (best/good/inaccuracy/mistake/blunder) come from a background re-evaluation with this same engine after each game &mdash; an approximate, heuristic read, not a calibrated accuracy score.</p>
         </div>
       </div>
+
+      <div class="panel">
+        <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Drill</div>
+        <div id="drill-idle">
+          <p class="hint" style="margin-bottom:10px;">Practice positions pulled from your own logged mistakes, a library of known traps, and a set of real puzzles &mdash; find the best move, no effect on your rating or history. Takes over the board while active.</p>
+          <label class="field" style="margin-bottom:10px;">
+            Source
+            <select id="drill-source">
+              <option value="all" selected>Everything</option>
+              <option value="mistakes">Your mistakes only</option>
+              <option value="traps">Traps only</option>
+              <option value="puzzles">Puzzles only</option>
+            </select>
+          </label>
+          <button class="primary" id="btn-drill-start" style="width:100%;">Start drill</button>
+          <p class="hint" id="drill-unavailable" style="margin-top:8px; display:none;"></p>
+        </div>
+        <div id="drill-active" style="display:none;">
+          <div class="hint" id="drill-label" style="margin-bottom:8px;"></div>
+          <div id="drill-feedback" style="min-height:2.6em; margin-bottom:10px; line-height:1.5;"></div>
+          <div class="row">
+            <button id="btn-drill-next" style="flex:1;" disabled>Next drill</button>
+            <button id="btn-drill-end" style="flex:1;">End drill</button>
+          </div>
+        </div>
+      </div>
     </aside>
   </main>
 </div>
@@ -417,6 +453,14 @@ __OPENINGS_SOURCE__
 
 <script id="opening-info-data" type="application/json">
 __OPENING_INFO_SOURCE__
+</script>
+
+<script id="traps-data" type="application/json">
+__TRAPS_SOURCE__
+</script>
+
+<script id="puzzles-data" type="application/json">
+__PUZZLES_SOURCE__
 </script>
 
 <script>
@@ -474,6 +518,42 @@ __OPENING_INFO_SOURCE__
     return null;
   }
 
+  // --- Trap library (used by the trap callout and by drill mode) ---
+  let traps = [];
+  try {
+    const raw = JSON.parse(document.getElementById('traps-data').textContent);
+    if (Array.isArray(raw)) traps = raw;
+  } catch (e) { console.error('Failed to parse traps data', e); }
+
+  // Matches the CURRENT position against the trap library, in one of two
+  // states: "about to spring" (every move except the trap's final, losing
+  // move has been played — sideCaught is on move right now and could still
+  // avoid it) or "sprung" (the full sequence, including that final move, was
+  // just played). Exact-length matching only, so a callout doesn't linger
+  // for the rest of the game once the position has moved past it.
+  function currentTrap() {
+    const hist = game.history();
+    for (const t of traps) {
+      if (t.moves.length === hist.length && t.moves.every((m, i) => hist[i] === m)) {
+        return { trap: t, sprung: true };
+      }
+      if (t.moves.length - 1 === hist.length && t.moves.slice(0, -1).every((m, i) => hist[i] === m)) {
+        return { trap: t, sprung: false };
+      }
+    }
+    return null;
+  }
+
+  // --- Puzzle library (drill mode's "Puzzles" source + the calibration quiz) ---
+  // From the public Lichess puzzle database (CC0) — see build/puzzles.json.
+  // Each entry is {fen, rating, themes}; fen is already the solver-facing
+  // position (the opponent's setup move has been applied).
+  let puzzles = [];
+  try {
+    const raw = JSON.parse(document.getElementById('puzzles-data').textContent);
+    if (Array.isArray(raw)) puzzles = raw;
+  } catch (e) { console.error('Failed to parse puzzles data', e); }
+
   const boardEl = document.getElementById('board');
   const statusPill = document.getElementById('status-pill');
   const statusText = document.getElementById('status-text');
@@ -496,6 +576,34 @@ __OPENING_INFO_SOURCE__
   let reviewPly = null;        // when set, the board shows this ply instead of live play
   let liveAnalysis = null;     // "Analyze so far" result for an unfinished game (not logged)
   let analyzing = false;       // true while any analysis pass (finished-game or live) is running
+
+  // --- Drill mode ---
+  // Entirely separate from `game`/profile/rating — practice only. While
+  // active, render() shows drillGame instead of the live game, and the main
+  // game controls are disabled so the two can't collide on the shared engine.
+  const DRILL_MOVETIME = 400;
+  let drillActive = false;
+  let drillGame = null;
+  let drillPool = [];
+  let drillCurrent = null;   // {fen, label, source}
+  let drillBaseline = null;  // engineGo() result for the position before the drill move
+  let drillSelected = null;
+  let drillLegalTargets = [];
+  let drillAwaitingMove = false;
+  let drillLastFen = null;   // avoid immediately repeating the same position
+  let drillKind = 'practice'; // 'practice' | 'calibration' — changes how submitDrillMove concludes
+
+  // --- Calibration quiz ---
+  // Six puzzles, one sampled from each rating band in the puzzle library,
+  // in ascending difficulty. Your performance across them (graded live by
+  // the same engine, not by matching a canonical solution) fits an initial
+  // Elo estimate via a simple logistic curve — the same idea behind
+  // real adaptive-testing systems, just with a fixed six-item set rather
+  // than true item-response branching.
+  const CALIBRATION_BANDS = [400, 800, 1200, 1600, 2000, 2400];
+  let calibrationItems = [];
+  let calibrationIndex = 0;
+  let calibrationResults = [];
 
   // Whichever analysis applies to the position on the board right now.
   function activeAnalysis() {
@@ -778,6 +886,8 @@ __OPENING_INFO_SOURCE__
         loss: Math.round(loss),
         tag: classifyLoss(loss),
         best: uciToSan(mv.before, evalBefore.bestMove),
+        fen: mv.before,        // position before the move — what drill mode replays
+        bestUci: evalBefore.bestMove,
       });
     }
     setAnalysisProgress(null);
@@ -889,6 +999,7 @@ __OPENING_INFO_SOURCE__
   }
 
   function enterReview(ply) {
+    if (drillActive) return;
     const total = game.history().length;
     if (!total) return;
     // Stepping past the last move returns to the live board rather than
@@ -905,6 +1016,7 @@ __OPENING_INFO_SOURCE__
   }
 
   function render() {
+    if (drillActive) { renderDrillBoard(); return; }
     boardEl.innerHTML = '';
     const inReview = reviewPly !== null;
     const view = inReview ? positionAtPly(reviewPly) : game;
@@ -1020,6 +1132,360 @@ __OPENING_INFO_SOURCE__
     return moveNo + (ply % 2 === 1 ? '.' : '...');
   }
 
+  // --- Drill mode ---
+  function buildDrillPool(source) {
+    const pool = [];
+    if (source === 'mistakes' || source === 'all') {
+      for (const g of profile.games) {
+        if (!g.analysis) continue;
+        for (const m of g.analysis.moveQuality) {
+          if ((m.tag === 'blunder' || m.tag === 'mistake') && m.fen) {
+            pool.push({
+              fen: m.fen,
+              label: 'Your mistake — ' + (g.opening || 'an unnamed opening') +
+                ', vs. a ~' + g.opponentElo + '-rated opponent. You played ' + m.san + '.',
+              source: 'mistake',
+            });
+          }
+        }
+      }
+    }
+    if (source === 'traps' || source === 'all') {
+      for (const t of traps) {
+        try {
+          const scratch = new Chess();
+          for (const san of t.moves.slice(0, -1)) scratch.move(san);
+          pool.push({ fen: scratch.fen(), label: 'Trap — ' + t.name, source: 'trap' });
+        } catch (e) {
+          console.warn('Skipping trap with an illegal move sequence:', t.name, e);
+        }
+      }
+    }
+    if (source === 'puzzles' || source === 'all') {
+      for (const p of puzzles) {
+        pool.push({ fen: p.fen, label: 'Puzzle — rated ~' + p.rating, source: 'puzzle' });
+      }
+    }
+    return pool;
+  }
+
+  async function pickNextDrill() {
+    if (!drillPool.length) return;
+    let item = drillPool[Math.floor(Math.random() * drillPool.length)];
+    if (drillPool.length > 1) {
+      let guard = 0;
+      while (item.fen === drillLastFen && guard++ < 10) {
+        item = drillPool[Math.floor(Math.random() * drillPool.length)];
+      }
+    }
+    drillLastFen = item.fen;
+    drillCurrent = item;
+    drillGame = new Chess(item.fen);
+    drillSelected = null;
+    drillLegalTargets = [];
+    drillAwaitingMove = false;
+    drillBaseline = null;
+    document.getElementById('drill-label').textContent = item.label;
+    document.getElementById('drill-feedback').textContent = 'Loading position…';
+    document.getElementById('btn-drill-next').disabled = true;
+    render();
+
+    const gen = engineGeneration;
+    const res = await engineGo(item.fen, DRILL_MOVETIME, 20);
+    if (gen !== engineGeneration || !drillActive || drillCurrent !== item) return;
+    if (!res) {
+      document.getElementById('drill-feedback').textContent = 'Engine did not respond — try Next drill.';
+      document.getElementById('btn-drill-next').disabled = false;
+      return;
+    }
+    drillBaseline = res;
+    drillAwaitingMove = true;
+    const toMove = fenSideToMove(item.fen) === 'w' ? 'White' : 'Black';
+    document.getElementById('drill-feedback').textContent = toMove + ' to move — find the best continuation.';
+  }
+
+  function startDrill() {
+    if (analyzing || engineThinking) { toast('Wait for the current move/analysis to finish'); return; }
+    drillKind = 'practice';
+    const source = document.getElementById('drill-source').value;
+    const pool = buildDrillPool(source);
+    const unavailEl = document.getElementById('drill-unavailable');
+    if (!pool.length) {
+      unavailEl.style.display = '';
+      unavailEl.textContent = source === 'mistakes'
+        ? 'No logged mistakes yet — finish a few games first, or drill from traps instead.'
+        : 'Nothing available for this source yet.';
+      return;
+    }
+    unavailEl.style.display = 'none';
+    cancelEngineWork();
+    exitReview();
+    drillPool = pool;
+    drillActive = true;
+    document.getElementById('drill-idle').style.display = 'none';
+    document.getElementById('drill-active').style.display = '';
+    setDrillControlsDisabled(true);
+    pickNextDrill();
+  }
+
+  function endDrill() {
+    cancelEngineWork();
+    drillActive = false;
+    drillKind = 'practice';
+    calibrationFinished = false;
+    drillGame = null;
+    drillCurrent = null;
+    document.getElementById('drill-idle').style.display = '';
+    document.getElementById('drill-active').style.display = 'none';
+    document.getElementById('calibration-active').style.display = 'none';
+    setDrillControlsDisabled(false);
+    render();
+  }
+
+  // Disables the live-game controls (and the other of drill/calibration)
+  // while one has the board, so they can't act on the shared engine/game
+  // state at the same time.
+  function setDrillControlsDisabled(disabled) {
+    for (const id of ['btn-new', 'btn-undo', 'btn-resign', 'btn-analyze-so-far', 'strength', 'player-color', 'btn-drill-start', 'btn-calibrate-start']) {
+      document.getElementById(id).disabled = disabled;
+    }
+  }
+
+  // --- Calibration quiz ---
+  function pickCalibrationItems() {
+    const items = [];
+    for (const band of CALIBRATION_BANDS) {
+      const inBand = puzzles.filter((p) => p.rating >= band && p.rating < band + 400);
+      if (inBand.length) items.push(inBand[Math.floor(Math.random() * inBand.length)]);
+    }
+    return items;
+  }
+
+  // Finds the rating R that best explains the observed pass/fail pattern,
+  // using the same expected-score curve as the adaptive-rating update
+  // (a simple, honest stand-in for real item-response-theory ability
+  // estimation — brute-force search rather than calculus, since the search
+  // space is small).
+  function estimateEloFromResults(results) {
+    let best = 1200, bestErr = Infinity;
+    for (let r = 400; r <= 2800; r += 25) {
+      let err = 0;
+      for (const item of results) {
+        const expected = 1 / (1 + Math.pow(10, (item.difficulty - r) / 400));
+        err += (item.score - expected) ** 2;
+      }
+      if (err < bestErr) { bestErr = err; best = r; }
+    }
+    return best;
+  }
+
+  function startCalibration() {
+    if (analyzing || engineThinking || drillActive) { toast('Wait for the current move/analysis to finish'); return; }
+    if (!puzzles.length) { toast('No puzzle data available'); return; }
+    calibrationItems = pickCalibrationItems();
+    if (calibrationItems.length < 3) { toast('Not enough puzzle data to calibrate'); return; }
+    cancelEngineWork();
+    exitReview();
+    drillKind = 'calibration';
+    calibrationIndex = 0;
+    calibrationResults = [];
+    drillActive = true;
+    document.getElementById('calibration-active').style.display = '';
+    setDrillControlsDisabled(true);
+    loadCalibrationStep();
+  }
+
+  async function loadCalibrationStep() {
+    const item = calibrationItems[calibrationIndex];
+    drillCurrent = { fen: item.fen, rating: item.rating };
+    drillGame = new Chess(item.fen);
+    drillSelected = null;
+    drillLegalTargets = [];
+    drillAwaitingMove = false;
+    drillBaseline = null;
+    document.getElementById('calibration-label').textContent =
+      'Puzzle ' + (calibrationIndex + 1) + ' of ' + calibrationItems.length + ' — rated ~' + item.rating;
+    document.getElementById('calibration-feedback').textContent = 'Loading position…';
+    document.getElementById('btn-calibrate-next').disabled = true;
+    render();
+
+    const gen = engineGeneration;
+    const res = await engineGo(item.fen, DRILL_MOVETIME, 20);
+    if (gen !== engineGeneration || !drillActive || drillKind !== 'calibration') return;
+    if (!res) {
+      document.getElementById('calibration-feedback').textContent = 'Engine did not respond — click Next to skip.';
+      document.getElementById('btn-calibrate-next').disabled = false;
+      return;
+    }
+    drillBaseline = res;
+    drillAwaitingMove = true;
+    const toMove = fenSideToMove(item.fen) === 'w' ? 'White' : 'Black';
+    document.getElementById('calibration-feedback').textContent = toMove + ' to move — find the best move.';
+  }
+
+  let calibrationFinished = false;
+
+  function advanceCalibration() {
+    const btn = document.getElementById('btn-calibrate-next');
+    btn.disabled = false;
+    btn.textContent = calibrationIndex + 1 < calibrationItems.length ? 'Next' : 'See my estimate';
+  }
+
+  function finishCalibration() {
+    const estimate = Math.round(estimateEloFromResults(calibrationResults));
+    rating.elo = Math.max(400, Math.min(2900, estimate));
+    rating.gamesPlayed = Math.max(rating.gamesPlayed, 2); // a little more confidence than a cold start, still provisional
+    saveRating();
+    updateRatingDisplay();
+    calibrationFinished = true;
+    document.getElementById('calibration-label').textContent = 'Calibration complete';
+    document.getElementById('calibration-feedback').textContent =
+      'Estimated rating: ' + rating.elo + '. This just sets your starting point — real games will keep refining it.';
+    const btn = document.getElementById('btn-calibrate-next');
+    btn.disabled = false;
+    btn.textContent = 'Done';
+  }
+
+  // Single handler for the calibration panel's one action button, whose
+  // meaning changes as the quiz progresses: advance to the next puzzle,
+  // then reveal the estimate, then close out.
+  function onCalibrateNextClick() {
+    if (calibrationFinished) { calibrationFinished = false; endDrill(); return; }
+    if (calibrationIndex + 1 < calibrationItems.length) {
+      calibrationIndex++;
+      loadCalibrationStep();
+    } else {
+      finishCalibration();
+    }
+  }
+
+  function onDrillSquareClick(square) {
+    if (!drillAwaitingMove) return;
+    if (drillSelected) {
+      const move = drillLegalTargets.find((m) => m.to === square);
+      if (move) { submitDrillMove(drillSelected, square, move); return; }
+    }
+    const piece = drillGame.get(square);
+    if (piece && piece.color === drillGame.turn()) {
+      drillSelected = square;
+      drillLegalTargets = drillGame.moves({ square, verbose: true });
+    } else {
+      drillSelected = null;
+      drillLegalTargets = [];
+    }
+    render();
+  }
+
+  async function submitDrillMove(from, to, move) {
+    const moverColor = drillGame.turn();
+    let promotion;
+    if (move.flags.includes('p')) promotion = 'q';
+    let played;
+    try {
+      played = drillGame.move({ from, to, promotion });
+    } catch (e) {
+      drillSelected = null; drillLegalTargets = []; render();
+      return;
+    }
+    drillSelected = null;
+    drillLegalTargets = [];
+    drillAwaitingMove = false;
+    render();
+    const feedbackEl = document.getElementById(drillKind === 'calibration' ? 'calibration-feedback' : 'drill-feedback');
+    feedbackEl.textContent = 'Checking your move…';
+
+    const gen = engineGeneration;
+    const fenBefore = drillCurrent.fen;
+    const fenAfter = drillGame.fen();
+    const evalAfter = await engineGo(fenAfter, ANALYSIS_MOVETIME, 20);
+    if (gen !== engineGeneration || !drillActive) return;
+
+    const bestSan = uciToSan(fenBefore, drillBaseline.bestMove);
+    let text, score;
+    if (!evalAfter) {
+      text = 'Could not verify that move. Engine’s pick: ' + (bestSan || '—');
+      score = 0.5; // engine timeout — don't let it bias a calibration result either way
+    } else {
+      const whiteBefore = scoreToWhiteCp(drillBaseline.score, fenSideToMove(fenBefore) === 'w');
+      const whiteAfter = scoreToWhiteCp(evalAfter.score, fenSideToMove(fenAfter) === 'w');
+      const loss = moverColor === 'w'
+        ? Math.max(0, whiteBefore - whiteAfter)
+        : Math.max(0, whiteAfter - whiteBefore);
+      const tag = classifyLoss(loss);
+      const label = { best: 'Best move!', good: 'Good.', inaccuracy: 'Inaccuracy.', mistake: 'Mistake.', blunder: 'Blunder.' }[tag];
+      text = label + (loss ? ' (−' + (loss / 100).toFixed(2) + ')' : '') +
+        ' Engine’s pick: ' + (bestSan || '—') +
+        (bestSan === played.san ? ' — that’s what you played.' : '');
+      score = tag === 'best' || tag === 'good' ? 1 : tag === 'inaccuracy' ? 0.5 : 0;
+    }
+    feedbackEl.textContent = text;
+
+    if (drillKind === 'calibration') {
+      calibrationResults.push({ difficulty: drillCurrent.rating, score });
+      advanceCalibration();
+    } else {
+      document.getElementById('btn-drill-next').disabled = false;
+    }
+  }
+
+  function renderDrillBoard() {
+    boardEl.innerHTML = '';
+    const board = drillGame.board();
+    const ranks = [0, 1, 2, 3, 4, 5, 6, 7];
+    const displayRanks = flipped ? ranks.slice().reverse() : ranks;
+    const displayFiles = flipped ? FILES.slice().reverse() : FILES;
+    const inCheckColor = drillGame.inCheck() ? drillGame.turn() : null;
+    let kingSquareInCheck = null;
+    if (inCheckColor) {
+      for (const row of board) for (const cell of row) {
+        if (cell && cell.type === 'k' && cell.color === inCheckColor) kingSquareInCheck = cell.square;
+      }
+    }
+
+    displayRanks.forEach((rankIdx, rowPos) => {
+      displayFiles.forEach((file, colPos) => {
+        const rank = 8 - rankIdx;
+        const square = file + rank;
+        const cell = board[rankIdx][FILES.indexOf(file)];
+        const isLight = (FILES.indexOf(file) + rankIdx) % 2 === 0;
+        const div = document.createElement('div');
+        div.className = 'sq ' + (isLight ? 'light' : 'dark');
+        div.dataset.square = square;
+        div.setAttribute('role', 'gridcell');
+        div.tabIndex = 0;
+
+        if (colPos === 0) {
+          const c = document.createElement('span');
+          c.className = 'coord';
+          c.textContent = rank;
+          div.appendChild(c);
+        }
+        if (cell) {
+          const p = document.createElement('span');
+          p.className = 'piece ' + (cell.color === 'w' ? 'white' : 'black');
+          p.textContent = PIECE_GLYPH[cell.type];
+          div.appendChild(p);
+        }
+        if (kingSquareInCheck === square) div.classList.add('check');
+        if (drillSelected === square) div.classList.add('selected');
+        const legal = drillLegalTargets.find((m) => m.to === square);
+        if (legal) {
+          div.classList.add('legal');
+          if (legal.captured || legal.flags.includes('e')) div.classList.add('capture');
+        }
+
+        div.addEventListener('click', () => onDrillSquareClick(square));
+        div.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDrillSquareClick(square); }
+        });
+        boardEl.appendChild(div);
+      });
+    });
+
+    statusPill.classList.remove('thinking', 'over', 'you');
+    statusText.textContent = drillAwaitingMove ? 'Drill — your move' : 'Drill';
+  }
+
   function renderOpening() {
     const hit = currentOpening();
     document.getElementById('opening-name').textContent = hit ? hit.name : 'Unnamed position';
@@ -1037,6 +1503,27 @@ __OPENING_INFO_SOURCE__
     } else {
       infoBtn.style.display = 'none';
       delete infoBtn.dataset.blurb;
+    }
+
+    const match = currentTrap();
+    const calloutEl = document.getElementById('trap-callout');
+    if (match) {
+      const { trap, sprung } = match;
+      const youAreCaught = trap.sideCaught === playerColor;
+      // The "not sprung" state means every move up through the losing side's
+      // actual mistake has been played — the capitalizing move is now sitting
+      // on the board, not still avoidable, so the copy says "watch for", not
+      // "watch out".
+      let prefix;
+      if (!sprung && youAreCaught) prefix = '⚠ Watch for ' + trap.name + ' — you may have just allowed it. ';
+      else if (!sprung) prefix = '💡 Watch for ' + trap.name + ' — your opponent may have just allowed it. ';
+      else if (youAreCaught) prefix = '😬 You just fell for ' + trap.name + '. ';
+      else prefix = '🎉 Your opponent just fell for ' + trap.name + '. ';
+      calloutEl.style.display = '';
+      document.getElementById('trap-name').textContent = trap.name;
+      document.getElementById('trap-description').textContent = prefix + trap.description;
+    } else {
+      calloutEl.style.display = 'none';
     }
   }
 
@@ -1364,6 +1851,7 @@ __OPENING_INFO_SOURCE__
 
   // --- Controls ---
   document.getElementById('btn-new').addEventListener('click', () => {
+    if (drillActive) return;
     startNewGame();
   });
 
@@ -1387,7 +1875,7 @@ __OPENING_INFO_SOURCE__
   }
 
   document.getElementById('btn-undo').addEventListener('click', () => {
-    if (resignedAsLoss) return;
+    if (resignedAsLoss || drillActive) return;
     cancelEngineWork();
     exitReview();
     unlogCurrentGame();
@@ -1403,7 +1891,7 @@ __OPENING_INFO_SOURCE__
   });
 
   document.getElementById('btn-resign').addEventListener('click', () => {
-    if (gameOver) return;
+    if (gameOver || drillActive) return;
     cancelEngineWork(); // stop any move the engine is still thinking about
     resignedAsLoss = true;
     gameOver = true;
@@ -1417,11 +1905,13 @@ __OPENING_INFO_SOURCE__
   });
 
   strengthEl.addEventListener('change', () => {
+    if (drillActive) return;
     updateRatingDisplay();
     save();
   });
 
   colorEl.addEventListener('change', () => {
+    if (drillActive) return;
     save();
     if (game.history().length === 0 && !gameOver) {
       startNewGame(); // no moves yet, so switching sides now is free
@@ -1463,7 +1953,7 @@ __OPENING_INFO_SOURCE__
   });
 
   document.getElementById('btn-analyze-so-far').addEventListener('click', async () => {
-    if (analyzing || engineThinking) { toast('Wait for the current move/analysis to finish'); return; }
+    if (analyzing || engineThinking || drillActive) { toast('Wait for the current move/analysis to finish'); return; }
     if (!game.history().length) { toast('No moves yet'); return; }
     if (gameOver) { toast('Game already logged with its own analysis below'); return; }
 
@@ -1486,8 +1976,15 @@ __OPENING_INFO_SOURCE__
     }
   });
 
+  document.getElementById('btn-drill-start').addEventListener('click', startDrill);
+  document.getElementById('btn-drill-next').addEventListener('click', pickNextDrill);
+  document.getElementById('btn-drill-end').addEventListener('click', endDrill);
+  document.getElementById('btn-calibrate-start').addEventListener('click', startCalibration);
+  document.getElementById('btn-calibrate-next').addEventListener('click', onCalibrateNextClick);
+
   document.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) return;
+    if (drillActive) return;
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
       enterReview((reviewPly === null ? game.history().length : reviewPly) - 1);

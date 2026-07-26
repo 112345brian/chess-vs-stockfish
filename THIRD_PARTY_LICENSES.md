@@ -25,5 +25,24 @@ versions/commits in `build/fetch-deps.sh`:
 - License: **CC0 1.0 Universal** (public domain dedication)
 - Used as the offline opening-name/ECO lookup data.
 
-None of these are committed to this repository — `build/fetch-deps.sh`
+None of the above are committed to this repository — `build/fetch-deps.sh`
 downloads them at build time from the sources above.
+
+## Lichess puzzle database
+
+- Source: https://database.lichess.org/ (mirrored via the
+  [Lichess/chess-puzzles](https://huggingface.co/datasets/Lichess/chess-puzzles)
+  Hugging Face dataset for the filtered subset actually used here)
+- License: **CC0 1.0 Universal** (public domain dedication)
+- `build/puzzles.json` is a curated, one-time-fetched subset (540 positions
+  spanning six rating bands, 400–2800) used by drill mode's "Puzzles" source
+  and the calibration quiz. Unlike the other fetched dependencies, this one
+  **is** committed to the repository — it was pulled from a queryable REST
+  API in a single filtering pass rather than a bulk file, so there's no
+  simple pinned-URL re-fetch step; regenerating it means re-running that
+  filtering process against the source above.
+
+Build/build.py loads this and the two originally-authored files below
+directly from the repository (they aren't fetched from anywhere):
+`build/opening_info.json` (this project's own writing) and `build/traps.json`
+(this project's own curated + independently-verified trap dataset).

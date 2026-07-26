@@ -7,12 +7,27 @@ build running in a Web Worker, and an offline opening-name database.
 
 **Play it live:** https://112345brian.github.io/chess-vs-stockfish/
 
+- Play White, Black, or a random side each game
 - Adjustable opponent: adaptive (targets ~100 Elo above your estimated
-  rating, adjusting after each finished game) or a fixed strength from
-  Beginner (~800) to Full strength (~2600+)
+  rating, with a provisional K-factor that swings fast for your first ~30
+  games and settles down after) or a fixed strength from Beginner (~800) to
+  Full strength (~2600+)
+- A six-puzzle calibration quiz sets a much better starting rating than a
+  cold 1200 guess, by fitting your pass/fail pattern across a spread of
+  puzzle difficulties to an Elo estimate
 - Progress autosaves to your browser's local storage — reopen the page to
   resume, or add `?new=1` to force a fresh game
-- Opening recognition against ~3,800 named lines (offline, no lookup)
+- Opening recognition against ~3,800 named lines, with hand-written
+  background for the ~130 most common families (offline, no lookup)
+- Known-trap detection (Scholar's Mate, Fried Liver, Légal's Trap, and 21
+  others) — a callout when you're about to walk into one or just did
+- Post-game move-quality analysis (best/good/inaccuracy/mistake/blunder,
+  ACPL) via a background re-evaluation with the same engine; a game-history
+  panel with a rating chart, most-played openings, and recent-games list;
+  click-through review mode with arrow-key navigation and mistake-jumping
+- Drill mode: practice positions pulled from your own logged mistakes, the
+  trap library, or a 540-puzzle set from the public Lichess database — find
+  the best move, graded live, no effect on your rating or history
 - Copy PGN, or copy a ready-made "look this position up" prompt to paste
   into a chat with Claude for real master-game stats and engine-checked
   best replies (see below)
@@ -29,17 +44,23 @@ current Stockfish. See `build/fetch-deps.sh` for the pinned version.
 ## Repo layout
 
 ```
-src/shell.html        Page template + all app logic (board rendering,
-                       move handling, adaptive rating, opening lookup)
-build/fetch-deps.sh    Downloads pinned chess.js / stockfish.js / opening
-                       data from their upstream sources
-build/build.py         Splices those into src/shell.html -> dist/index.html
-setup/install-macos.sh Sets up the *separate* local chess-mcp MCP server
-                       (Stockfish tool access for Claude Code in chat —
-                       not used by the browser game itself)
-raycast/chess.sh       Raycast Script Command: launch the game with a
-                       Resume/New Game prompt
-.github/workflows/     Builds and deploys dist/ to GitHub Pages on push
+src/shell.html         Page template + all app logic (board rendering,
+                        move handling, adaptive rating, opening lookup,
+                        drill mode, calibration quiz)
+build/fetch-deps.sh     Downloads pinned chess.js / stockfish.js / opening
+                        data from their upstream sources
+build/opening_info.json This project's own opening-background write-ups
+build/traps.json        This project's own curated, verified trap dataset
+build/puzzles.json      A committed, filtered subset of the Lichess puzzle
+                        database (CC0) — see THIRD_PARTY_LICENSES.md
+build/build.py          Splices all of the above into src/shell.html ->
+                        dist/index.html
+setup/install-macos.sh  Sets up the *separate* local chess-mcp MCP server
+                        (Stockfish tool access for Claude Code in chat —
+                        not used by the browser game itself)
+raycast/chess.sh        Raycast Script Command: launch the game with a
+                        Resume/New Game prompt
+.github/workflows/      Builds and deploys dist/ to GitHub Pages on push
 ```
 
 ## Building it yourself

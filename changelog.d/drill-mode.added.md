@@ -1,0 +1,1 @@
+Drill mode: practice positions pulled from your own logged mistakes, the trap library, or a 540-position set from the public Lichess puzzle database, with each attempt graded live by the embedded engine (best/good/inaccuracy/mistake/blunder, plus the engine's own preferred move) — purely practice, no effect on your rating or game history.

@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 VENDOR = ROOT / "build" / "vendor"
 DIST = ROOT / "dist"
 OPENING_INFO = ROOT / "build" / "opening_info.json"
+TRAPS = ROOT / "build" / "traps.json"
+PUZZLES = ROOT / "build" / "puzzles.json"
 
 
 def load_openings():
@@ -34,6 +36,14 @@ def main():
     opening_info = json.dumps(
         json.loads(OPENING_INFO.read_text(encoding="utf-8")), ensure_ascii=False, separators=(",", ":")
     )
+    if TRAPS.exists():
+        traps = json.dumps(json.loads(TRAPS.read_text(encoding="utf-8")), ensure_ascii=False, separators=(",", ":"))
+    else:
+        print(f"Warning: {TRAPS} not found — building with an empty traps dataset.")
+        traps = "[]"
+    puzzles = json.dumps(
+        json.loads(PUZZLES.read_text(encoding="utf-8")), ensure_ascii=False, separators=(",", ":")
+    )
 
     # These get embedded inside <script type="text/plain">/<script type="application/json">
     # blocks, never executed as HTML, so only a literal "</script" sequence needs escaping.
@@ -41,12 +51,16 @@ def main():
     stockfish = stockfish.replace("</script", "<\\/script")
     openings = openings.replace("</script", "<\\/script")
     opening_info = opening_info.replace("</script", "<\\/script")
+    traps = traps.replace("</script", "<\\/script")
+    puzzles = puzzles.replace("</script", "<\\/script")
 
     out = (
         shell.replace("__CHESSJS_SOURCE__", chessjs)
         .replace("__STOCKFISH_SOURCE__", stockfish)
         .replace("__OPENINGS_SOURCE__", openings)
         .replace("__OPENING_INFO_SOURCE__", opening_info)
+        .replace("__TRAPS_SOURCE__", traps)
+        .replace("__PUZZLES_SOURCE__", puzzles)
     )
 
     DIST.mkdir(exist_ok=True)

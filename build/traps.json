@@ -1,0 +1,146 @@
+[
+  {
+    "name": "Scholar's Mate",
+    "moves": ["e4", "e5", "Qh5", "Nc6", "Bc4", "Nf6", "Qxf7#"],
+    "sideCaught": "b",
+    "description": "White's queen and bishop both take aim at f7, the weakest square in Black's camp, and Black's natural developing move ignores the threat once too often, walking into checkmate. Black had to spot the danger and defend f7 (or counterattack the queen) instead of casually developing."
+  },
+  {
+    "name": "Fool's Mate",
+    "moves": ["f3", "e5", "g4", "Qh4#"],
+    "sideCaught": "w",
+    "description": "The fastest possible checkmate in chess: White's first two moves (1.f3 and 2.g4) rip open the diagonal in front of its own king, and Black's queen simply walks in to deliver mate on h4. A cautionary tale about weakening the squares around your own king with no development to show for it."
+  },
+  {
+    "name": "Légal's Trap",
+    "moves": ["e4", "e5", "Nf3", "d6", "Bc4", "Bg4", "Nc3", "h6", "Nxe5", "Bxd1", "Bxf7+", "Ke7", "Nd5#"],
+    "sideCaught": "b",
+    "description": "Black's bishop pins White's knight to the queen, so Black assumes the knight can't safely capture on e5 -- but the pin isn't absolute (Black's king is on e8, not d8), so White sacrifices the queen anyway. Black grabs the \"free\" queen and gets mated in two more moves. Black should have simply recaptured on e5 instead of assuming the pin was real."
+  },
+  {
+    "name": "Fried Liver Attack",
+    "moves": ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "d5", "exd5", "Nxd5", "Nxf7"],
+    "sideCaught": "b",
+    "description": "White sacrifices a knight on f7, dragging Black's king into the open. Black is more or less forced to take (Kxf7), after which Qf3+ and Nc3 build a ferocious attack that often outweighs the piece. Black's 5...Nxd5 recapture is the move that walks into this -- 5...Na5 or 5...Nb4 sidesteps the whole line."
+  },
+  {
+    "name": "Fishing Pole Trap",
+    "moves": ["e4", "e5", "Nf3", "Nc6", "Bb5", "Nf6", "O-O", "Ng4", "h3", "h5", "hxg4", "hxg4", "Ng5", "Qxg5"],
+    "sideCaught": "w",
+    "description": "Black dangles a knight on g4 like bait; when White bites with hxg4, Black recaptures with the h-pawn, ripping open the h-file and leaving White's own knight with nowhere safe to go. The knight's only retreat, Ng5, hangs to the queen for free, leaving White down material with a wrecked kingside. White should have left the knight alone rather than grabbing it."
+  },
+  {
+    "name": "Elephant Trap",
+    "moves": ["d4", "d5", "c4", "e6", "Nc3", "Nf6", "Bg5", "Nbd7", "cxd5", "exd5", "Nxd5", "Nxd5", "Bxd8", "Bb4+", "Qd2", "Bxd2+", "Kxd2", "Kxd8"],
+    "sideCaught": "w",
+    "description": "White grabs a seemingly free pawn on d5 and then even wins Black's queen, all because Black's knight on f6 looks pinned to the queen by the bishop on g5. But it's only a relative pin -- after Bxd8, Black's Bb4+ forks in a check that wins the queen right back, leaving White down a full piece. White should never have played 6.Nxd5 in the first place."
+  },
+  {
+    "name": "Blackburne Shilling Gambit",
+    "moves": ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nd4", "Nxe5", "Qg5", "Nxf7", "Qxg2", "Rf1", "Qxe4+", "Be2", "Nf3#"],
+    "sideCaught": "w",
+    "description": "Black's 3...Nd4 looks like a beginner's blunder, and greedy White snaps up first the e5 pawn and then f7. But Black's queen swings through g2 and e4 with check after check, and the point of the whole line lands: a smothered-style knight mate on f3. White should never have grabbed e5 -- simply developing was fine."
+  },
+  {
+    "name": "Halosar Trap",
+    "moves": ["d4", "d5", "e4", "dxe4", "Nc3", "Nf6", "f3", "exf3", "Qxf3", "Qxd4", "Be3", "Qb4", "O-O-O", "Bg4", "Nb5", "Bxf3", "Nxc7#"],
+    "sideCaught": "b",
+    "description": "In this Blackmar-Diemer Ryder Gambit line, Black grabs pawn after pawn and finally wins White's queen with 8...Bxf3 -- but White doesn't need the queen back, because 9.Nxc7 is checkmate: the knight forks the king with no flight squares and no way to block or capture it. Black's queen-hunting left the king completely undefended on the back rank."
+  },
+  {
+    "name": "Noah's Ark Trap",
+    "moves": ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "d6", "d4", "b5", "Bb3", "Nxd4", "Nxd4", "exd4", "Qxd4", "c5", "Qd5", "Be6", "Qc6+", "Bd7", "Qd5", "c4"],
+    "sideCaught": "w",
+    "description": "White's queen grabs a pawn on d4 and gets chased around the board, and by the time it settles back on d5 Black's pawns have quietly crept forward -- a6, b5, and now c4 -- boxing in White's bishop on b3 with no escape square. The bishop is simply lost next move. White's error was accepting the pawn on move 8 rather than developing normally."
+  },
+  {
+    "name": "Monticelli Trap",
+    "moves": ["d4", "Nf6", "c4", "e6", "Nf3", "Bb4+", "Bd2", "Bxd2+", "Qxd2", "b6", "g3", "Bb7", "Bg2", "O-O", "Nc3", "Ne4", "Qc2", "Nxc3", "Ng5"],
+    "sideCaught": "b",
+    "description": "Black's Nxc3 looks like it just wins a pawn, but it opens the long diagonal for White's fianchettoed bishop right as White's knight leaps to g5 -- suddenly Qxh7# is a real mate threat alongside Bxb7 forking the rook. Black has to give back the exchange one way or another. The safer 8...c5 avoids walking into this."
+  },
+  {
+    "name": "Magnus Smith Trap",
+    "moves": ["e4", "c5", "Nf3", "d6", "d4", "cxd4", "Nxd4", "Nf6", "Nc3", "Nc6", "Bc4", "g6", "Nxc6", "bxc6", "e5", "dxe5", "Bxf7+", "Kxf7", "Qxd8"],
+    "sideCaught": "b",
+    "description": "Black's 6...g6 looks like normal fianchetto prep, but it leaves the long diagonal towards d8 fatally undefended. After the central break e5, Black's natural recapture opens the d-file completely; Bxf7+ drags the king away and Qxd8 simply wins the queen for a bishop and pawn. Black needed 6...Bd7 or similar to keep the d-file guarded."
+  },
+  {
+    "name": "Siberian Trap",
+    "moves": ["e4", "c5", "d4", "cxd4", "c3", "dxc3", "Nxc3", "Nc6", "Nf3", "e6", "Bc4", "Qc7", "O-O", "Nf6", "Qe2", "Ng4", "h3"],
+    "sideCaught": "w",
+    "description": "In the Smith-Morra Gambit, White's natural-looking 9.h3, kicking the knight, is actually a losing blunder: Black answers 9...Nd4! and White has no way to stop both 10...Nxf3+ and mate on h2. White had to play 9.Nb5 instead of grabbing at the knight."
+  },
+  {
+    "name": "Traxler Counterattack",
+    "moves": ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "Bc5", "Nxf7", "Bxf2+", "Ke2", "Nd4+", "Kd3", "b5"],
+    "sideCaught": "w",
+    "description": "Instead of the meek Fried Liver defenses, Black lets the knight take f7 and counterattacks the White king directly with a bishop sacrifice on f2. If White's king wanders to e2 and d3 trying to survive, Black's pieces swarm in (here with the quiet but crushing 7...b5, opening lines and gaining tempo) and White is completely lost with no good defense. White does much better meeting 4...Bc5 with the calmer 5.Bxf7+ line instead of grabbing on f7 with the knight."
+  },
+  {
+    "name": "Mortimer Trap",
+    "moves": ["e4", "e5", "Nf3", "Nc6", "Bb5", "Nf6", "d3", "Ne7", "Nxe5", "c6", "Bc4", "Qa5+"],
+    "sideCaught": "w",
+    "description": "Black's odd-looking 4...Ne7 is bait: if White grabs the loose e5 pawn, Black plays c6 to kick the bishop, and wherever it retreats, Qa5+ forks the White king and the knight on e5, winning the piece back with interest. White should decline the pawn and simply castle instead of taking on e5."
+  },
+  {
+    "name": "Rubinstein Trap",
+    "moves": ["d4", "d5", "Nf3", "Nf6", "c4", "e6", "Bg5", "Nbd7", "e3", "Be7", "Nc3", "O-O", "Rc1", "Re8", "Qc2", "a6", "cxd5", "exd5", "Bd3", "c6", "O-O", "Ne4", "Bf4", "f5", "Nxd5"],
+    "sideCaught": "b",
+    "description": "Black's plan of ...Ne4 and ...f5 looks like standard central play, but it overlooks that after Nxd5, taking the knight back allows Bc7 trapping Black's queen on the back rank -- so Black has to let White keep the extra pawn. Named for Akiba Rubinstein, who fell for this exact idea twice in top-level games."
+  },
+  {
+    "name": "Marshall Trap",
+    "moves": ["e4", "e5", "Nf3", "Nf6", "Nxe5", "d6", "Nf3", "Nxe4", "d4", "d5", "Bd3", "Bd6", "O-O", "O-O", "c4", "Bg4", "cxd5", "f5", "Re1", "Bxh2+"],
+    "sideCaught": "w",
+    "description": "In this Petroff Defense line, White's natural-looking 10.Re1 overlooks a crushing sacrifice: Bxh2+! rips open the king, and after Kxh2 Nxf2 followed by Nxd3 and Qh4+, Black wins back the piece with a decisive attack. White should have played 10.Nc3 instead of the careless rook move."
+  },
+  {
+    "name": "Englund Gambit Trap",
+    "moves": ["d4", "e5", "dxe5", "Nc6", "Nf3", "Qe7", "Bf4", "Qb4+", "Bd2", "Qxb2", "Bc3", "Bb4", "Qd2", "Bxc3", "Qxc3", "Qc1#"],
+    "sideCaught": "w",
+    "description": "White tries to hang onto the extra pawn Black grabbed on b2, but 6.Bc3 walks into a pin: Black's Bb4 skewers the bishop to the queen, and if White tries to keep the material with Qd2 and Qxc3, Black delivers mate on c1 -- White's own knight and pawn block every escape and defense. White had to play 6.Nc3 instead, guarding b2 without hanging the bishop."
+  },
+  {
+    "name": "Petrov's Trap",
+    "moves": ["e4", "e5", "Nf3", "Nf6", "Nxe5", "d6", "Nf3", "Nxe4", "Qe2"],
+    "sideCaught": "b",
+    "description": "Even after correctly kicking the knight back with 3...d6, Black falls for the same idea a move later: recapturing on e4 runs into Qe2, pinning the knight to the king along the open e-file. Black must give up the extra pawn (and time) to untangle with ...Qe7, handing White a comfortable edge. The safe path was simply developing instead of grabbing the pawn."
+  },
+  {
+    "name": "Anderssen Trap",
+    "moves": ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qa5", "b4", "c6", "bxa5"],
+    "sideCaught": "b",
+    "description": "In the Scandinavian Defense, White offers a pawn with 4.b4, directly attacking Black's queen on a5. If Black doesn't notice and plays the natural-looking 4...c6 instead of moving the queen, White simply captures it with bxa5 -- winning a whole queen for a pawn. Black had to retreat the queen (or take the pawn) instead of ignoring the attack."
+  },
+  {
+    "name": "Damiano Defense Trap",
+    "moves": ["e4", "e5", "Nf3", "f6", "Nxe5", "fxe5", "Qh5+", "g6", "Qxe5+"],
+    "sideCaught": "b",
+    "description": "Black's 2...f6 fatally weakens the king's diagonal, and after the knight sacrifice on e5 is accepted, Qh5+ forces g6, which blocks the check but opens the long diagonal even further. Qxe5+ now forks the king and the rook on h8, leaving Black down a rook for a knight. Black's 2...f6 was the losing move -- almost any other reply holds the position."
+  },
+  {
+    "name": "Stafford Gambit Trap",
+    "moves": ["e4", "e5", "Nf3", "Nf6", "Nxe5", "Nc6", "Nxc6", "dxc6", "d3", "Bc5", "Bg5", "Nxe4", "Bxd8", "Bxf2+", "Ke2", "Bg4#"],
+    "sideCaught": "w",
+    "description": "White's 6.Bg5 pins Black's knight to the queen and looks completely safe to meet with the pawn grab Nxe4, since the knight seems pinned -- but as in Légal's Trap, the pin is only relative. White grabs the queen with Bxd8, and Black delivers a smothered-style mate two moves later with Bxf2+ and Bg4#. White should never have let the knight capture on e4 unpunished; 7.Bxd8 was the fatal choice over simply retreating."
+  },
+  {
+    "name": "Kieninger Trap",
+    "moves": ["d4", "Nf6", "c4", "e5", "dxe5", "Ng4", "Bf4", "Nc6", "Nf3", "Bb4+", "Nbd2", "Qe7", "a3", "Ngxe5", "axb4", "Nd3#"],
+    "sideCaught": "w",
+    "description": "In the Budapest Gambit, White's 7.a3 attacks the checking bishop but ignores Black's mounting pressure on e5. Black simply recaptures the pawn with the knight, and when White greedily grabs the bishop with axb4, Nd3 is checkmate -- the knight forks the king with every escape square covered by White's own pieces. White had to deal with the threat on e5 instead of chasing the bishop."
+  },
+  {
+    "name": "Tarrasch Trap",
+    "moves": ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6", "O-O", "Nxe4", "d4", "b5", "Bb3", "d5", "dxe5", "Be6", "c3", "Be7", "Re1", "O-O", "Nd4", "Qd7", "Nxe6"],
+    "sideCaught": "b",
+    "description": "In the Ruy Lopez Open Variation, Black's queen move 11...Qd7 overlooks that the knight on d4 can simply capture the bishop on e6 -- recapturing with either the queen or the pawn allows White's rook to pick up the loose knight on e4 as well, winning a full piece. Named after Siegbert Tarrasch, who caught two different world championship challengers with this exact idea."
+  },
+  {
+    "name": "Milner-Barry Gambit Trap",
+    "moves": ["e4", "e6", "d4", "d5", "e5", "c5", "c3", "Nc6", "Nf3", "Qb6", "Bd3", "cxd4", "cxd4", "Nxd4", "Bb5+", "Bd7", "Nxd4"],
+    "sideCaught": "b",
+    "description": "In this French Defense gambit, grabbing the second pawn with 7...Nxd4 looks safe since nothing seems to guard d4, but it opens the c6-square the knight just vacated, letting Bb5+ come in with check. Black has to block with the bishop, and White simply scoops up the knight on d4, ending up a full piece ahead. Black should have developed with 7...Bd7 first instead of grabbing the pawn."
+  }
+]

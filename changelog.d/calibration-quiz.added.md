@@ -1,0 +1,1 @@
+A six-puzzle calibration quiz (Opponent panel → "Calibrate my rating") that sets your starting Elo estimate by fitting your pass/fail pattern across a spread of real puzzle difficulties to a logistic curve, rather than starting blind at 1200 — a lightweight version of the same idea behind adaptive-testing ability estimation.
