@@ -1,0 +1,1 @@
+Hovering (or focusing) any move in the Moves history panel now draws an arrow on the board from that move's origin to destination square, colored by its analysis tag when available, plus an instant readout of the move's quality/loss/engine-preferred-alternative below the list.

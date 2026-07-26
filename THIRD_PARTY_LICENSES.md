@@ -3,15 +3,35 @@
 This project's build fetches and embeds the following, all pinned to exact
 versions/commits in `build/fetch-deps.sh`:
 
-## Stockfish (via stockfish.js)
+## Stockfish — live-play engine (via stockfish.js)
 
 - Source: https://github.com/nmrugg/stockfish.js (npm package `stockfish.js@10.0.2`)
 - License: **GNU GPL v3**
 - Copyright T. Romstad, M. Costalba, J. Kiiski, G. Linscott and other
   Stockfish contributors. Multi-variant fork by Daniel Dugovic and
   contributors.
+- Old and deliberately weak — used only for the opponent's own moves, where
+  Skill Level already limits play to match your rating, so a stronger
+  engine's extra ceiling would be wasted. See the analysis engine below for
+  the one used to actually judge move quality.
 - This is why the repository as a whole is licensed under GPLv3 — see
   [LICENSE](./LICENSE).
+
+## Stockfish 18 — analysis engine (via the `stockfish` npm package)
+
+- Source: https://github.com/nmrugg/stockfish.js, release `v18.0.0`
+  (`stockfish-18-lite-single.js` + `.wasm`)
+- License: **GNU GPL v3**
+- Copyright the Stockfish authors and contributors; NNUE nets by Linmiao Xu
+  (linrock); this particular packaging (c) Chess.com, LLC.
+- Single-threaded (no `SharedArrayBuffer`/COOP-COEP headers needed — verified
+  by grepping the build for any reference to it) but still NNUE-based, unlike
+  the old classical-eval build above — used for post-game analysis, drill
+  mode, and the calibration quiz, where move-quality judgments actually need
+  to be trustworthy. Lazy-loaded: nothing is fetched until analysis/drill/
+  calibration is actually used. The `.wasm` binary (~7MB) ships as a sibling
+  file next to `index.html` rather than inlined, both to avoid ~33% base64
+  bloat and so the browser can cache it independently across visits.
 
 ## chess.js
 

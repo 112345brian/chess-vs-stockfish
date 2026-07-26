@@ -1,9 +1,9 @@
 # Chess vs. Stockfish
 
 Play chess against Stockfish entirely in your browser — no server, no
-account, no network calls once the page loads. A single static HTML page
-that bundles chess.js (rules/state), an old single-threaded Stockfish
-build running in a Web Worker, and an offline opening-name database.
+account. A static page that bundles chess.js (rules/state), two Stockfish
+builds running in Web Workers (one for live play, one for analysis — see
+below), and an offline opening-name database.
 
 **Play it live:** https://112345brian.github.io/chess-vs-stockfish/
 
@@ -22,9 +22,10 @@ build running in a Web Worker, and an offline opening-name database.
 - Known-trap detection (Scholar's Mate, Fried Liver, Légal's Trap, and 21
   others) — a callout when you're about to walk into one or just did
 - Post-game move-quality analysis (best/good/inaccuracy/mistake/blunder,
-  ACPL) via a background re-evaluation with the same engine; a game-history
-  panel with a rating chart, most-played openings, and recent-games list;
-  click-through review mode with arrow-key navigation and mistake-jumping
+  ACPL) via a background re-evaluation with a much stronger, lazily-loaded
+  engine (see below); a game-history panel with a rating chart, most-played
+  openings, and recent-games list; click-through review mode with
+  arrow-key navigation and mistake-jumping
 - Drill mode: practice positions pulled from your own logged mistakes, the
   trap library, or a 540-puzzle set from the public Lichess database — find
   the best move, graded live, no effect on your rating or history
@@ -32,14 +33,28 @@ build running in a Web Worker, and an offline opening-name database.
   into a chat with Claude for real master-game stats and engine-checked
   best replies (see below)
 
-## Why a single-threaded, ~2019-era Stockfish build
+## Two engines, not one
 
-Modern multi-threaded Stockfish WASM builds need `SharedArrayBuffer`,
-which requires COOP/COEP cross-origin-isolation headers — not something a
-static page on GitHub Pages (or a sandboxed artifact) can set. The
-single-threaded asm.js build has no such requirement and runs fine inside
-a `Worker` created from a `Blob`, at the cost of being weaker/slower than
-current Stockfish. See `build/fetch-deps.sh` for the pinned version.
+Live play and analysis want opposite things — live play wants instant
+startup and doesn't need real strength (Skill Level already deliberately
+weakens it to match your rating), while analysis needs to be genuinely
+trustworthy or its blunder/mistake tags are just noise. So there are two
+separate engines, both single-threaded (modern multi-threaded Stockfish
+WASM needs `SharedArrayBuffer`, which needs COOP/COEP headers — not
+something a static page on GitHub Pages, or a sandboxed artifact, can set):
+
+- **Live play**: an old (~2019), small, classical-eval build, loaded
+  eagerly at boot. Fast and tiny; its low ceiling doesn't matter since
+  Skill Level caps it anyway.
+- **Analysis** (post-game, drill mode, calibration): Stockfish 18, NNUE,
+  single-threaded "lite" build — genuinely strong, not just "given more
+  time." **Lazy-loaded**: nothing is fetched until analysis/drill/
+  calibration actually runs, since most sessions are just live play. Its
+  ~7MB `.wasm` binary ships as a sibling file next to `index.html` rather
+  than base64-inlined, both to avoid the size bloat that would cause and
+  so the browser can cache it independently across visits.
+
+See `build/fetch-deps.sh` for both pinned versions.
 
 ## Repo layout
 

@@ -124,10 +124,19 @@
   :root[data-layout="one"] main { grid-template-columns: 1fr; }
 
   .board-frame {
+    position: relative;
     background: linear-gradient(160deg, var(--board-dark), color-mix(in srgb, var(--board-dark) 80%, black));
     padding: 14px;
     border-radius: 10px;
     box-shadow: 0 10px 30px -12px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  #move-arrow-overlay {
+    position: absolute;
+    top: 14px; left: 14px; right: 14px; bottom: 14px;
+    width: calc(100% - 28px);
+    height: calc(100% - 28px);
+    pointer-events: none;
+    display: none;
   }
   .board {
     display: grid;
@@ -317,6 +326,7 @@
   <main>
     <div class="board-frame">
       <div class="board" id="board" role="grid" aria-label="Chess board"></div>
+      <svg id="move-arrow-overlay" aria-hidden="true"></svg>
     </div>
 
     <aside>
@@ -402,6 +412,7 @@
       <div class="panel">
         <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Moves</div>
         <div class="movelist" id="movelist"><div class="empty">No moves yet &mdash; make the first one.</div></div>
+        <div class="hint" id="move-hover-info" style="min-height:1.4em; margin-top:6px;"></div>
         <div id="review-bar" style="display:none; margin-top:10px;">
           <div class="hint" id="review-label" style="margin-bottom:8px;"></div>
           <div class="row">
@@ -471,6 +482,13 @@ __CHESSJS_SOURCE__
 
 <script id="stockfish-src" type="text/plain">
 __STOCKFISH_SOURCE__
+</script>
+
+<!-- Stronger engine (Stockfish 18, NNUE) for analysis/drill/calibration only —
+     its JS wrapper is small (~20KB) so inlining that is fine, but its wasm
+     binary is fetched lazily as a separate file, only when actually needed. -->
+<script id="analysis-engine-src" type="text/plain">
+__ANALYSIS_ENGINE_SOURCE__
 </script>
 
 <script id="openings-data" type="application/json">
@@ -623,7 +641,13 @@ __PUZZLES_SOURCE__
   // Entirely separate from `game`/profile/rating — practice only. While
   // active, render() shows drillGame instead of the live game, and the main
   // game controls are disabled so the two can't collide on the shared engine.
-  const DRILL_MOVETIME = 400;
+  // 250-400ms was fast but genuinely shallow for this engine — shallow
+  // enough that ordinary developing moves in the opening could get
+  // misclassified as mistakes/blunders from search noise alone, not because
+  // they were actually bad. 1.2s is still reasonable for a background pass
+  // (with a progress indicator already shown) or a single drill/calibration
+  // position, and gives real accuracy priority over speed.
+  const DRILL_MOVETIME = 1200;
   let drillActive = false;
   let drillGame = null;
   let drillPool = [];
@@ -805,7 +829,7 @@ __PUZZLES_SOURCE__
   // adaptive rating update). Capped so localStorage doesn't grow forever.
   const PROFILE_KEY = 'chess-vs-stockfish:profile:v1';
   const PROFILE_MAX_GAMES = 200;
-  const ANALYSIS_MOVETIME = 250; // ms per position — a background pass, not live play
+  const ANALYSIS_MOVETIME = 1200; // see DRILL_MOVETIME's comment — same reasoning
 
   // Stored state is untrusted: it can be corrupt, hand-edited, or written by
   // an older version. Validate the shape and fall back rather than letting a
@@ -909,11 +933,11 @@ __PUZZLES_SOURCE__
       const mv = playerMoves[i];
       setAnalysisProgress({ done: i, total: playerMoves.length });
 
-      const evalBefore = await engineGo(mv.before, ANALYSIS_MOVETIME, 20);
+      const evalBefore = await analysisEngineGo(mv.before, ANALYSIS_MOVETIME);
       if (gen !== engineGeneration) return null;
-      const evalAfter = await engineGo(mv.after, ANALYSIS_MOVETIME, 20);
+      const evalAfter = await analysisEngineGo(mv.after, ANALYSIS_MOVETIME);
       if (gen !== engineGeneration) return null;
-      if (!evalBefore || !evalAfter) return null; // engine timed out
+      if (!evalBefore || !evalAfter) return null; // engine timed out or failed to load
 
       const whiteBefore = scoreToWhiteCp(evalBefore.score, fenSideToMove(mv.before) === 'w');
       const whiteAfter = scoreToWhiteCp(evalAfter.score, fenSideToMove(mv.after) === 'w');
@@ -1239,7 +1263,7 @@ __PUZZLES_SOURCE__
     render();
 
     const gen = engineGeneration;
-    const res = await engineGo(item.fen, DRILL_MOVETIME, 20);
+    const res = await analysisEngineGo(item.fen, DRILL_MOVETIME);
     if (gen !== engineGeneration || !drillActive || drillCurrent !== item) return;
     if (!res) {
       document.getElementById('drill-feedback').textContent = 'Engine did not respond — try Next drill.';
@@ -1358,7 +1382,7 @@ __PUZZLES_SOURCE__
     render();
 
     const gen = engineGeneration;
-    const res = await engineGo(item.fen, DRILL_MOVETIME, 20);
+    const res = await analysisEngineGo(item.fen, DRILL_MOVETIME);
     if (gen !== engineGeneration || !drillActive || drillKind !== 'calibration') return;
     if (!res) {
       document.getElementById('calibration-feedback').textContent = 'Engine did not respond — click Next to skip.';
@@ -1445,7 +1469,7 @@ __PUZZLES_SOURCE__
     const gen = engineGeneration;
     const fenBefore = drillCurrent.fen;
     const fenAfter = drillGame.fen();
-    const evalAfter = await engineGo(fenAfter, ANALYSIS_MOVETIME, 20);
+    const evalAfter = await analysisEngineGo(fenAfter, ANALYSIS_MOVETIME);
     if (gen !== engineGeneration || !drillActive) return;
 
     const bestSan = uciToSan(fenBefore, drillBaseline.bestMove);
@@ -1582,8 +1606,8 @@ __PUZZLES_SOURCE__
   }
 
   function renderMoveList() {
-    const hist = game.history();
-    if (!hist.length) {
+    const verboseHist = game.history({ verbose: true });
+    if (!verboseHist.length) {
       movelistEl.innerHTML = '<div class="empty">No moves yet &mdash; make the first one.</div>';
       return;
     }
@@ -1591,8 +1615,8 @@ __PUZZLES_SOURCE__
     const qualityByPly = new Map();
     if (analysis) for (const m of analysis.moveQuality) qualityByPly.set(m.ply, m);
 
-    const cell = (san, ply) => {
-      if (!san) return '<div></div>';
+    const cell = (mv, ply) => {
+      if (!mv) return '<div></div>';
       const q = qualityByPly.get(ply);
       const cls = ['mv'];
       if (q) cls.push('q-' + q.tag);
@@ -1601,13 +1625,13 @@ __PUZZLES_SOURCE__
         ? q.tag + (q.loss ? ' (−' + (q.loss / 100).toFixed(2) + ')' : '') +
           (q.best && q.best !== q.san ? ', engine preferred ' + q.best : '')
         : 'Click to review';
-      return '<div class="' + cls.join(' ') + '" data-ply="' + ply + '" role="button" tabindex="0" title="' +
-        title.replace(/"/g, '&quot;') + '">' + san + '</div>';
+      return '<div class="' + cls.join(' ') + '" data-ply="' + ply + '" data-from="' + mv.from + '" data-to="' + mv.to +
+        '" role="button" tabindex="0" title="' + title.replace(/"/g, '&quot;') + '">' + mv.san + '</div>';
     };
 
     let html = '';
-    for (let i = 0; i < hist.length; i += 2) {
-      html += '<div class="n">' + (i / 2 + 1) + '.</div>' + cell(hist[i], i + 1) + cell(hist[i + 1], i + 2);
+    for (let i = 0; i < verboseHist.length; i += 2) {
+      html += '<div class="n">' + (i / 2 + 1) + '.</div>' + cell(verboseHist[i], i + 1) + cell(verboseHist[i + 1], i + 2);
     }
     movelistEl.innerHTML = html;
     if (reviewPly === null) movelistEl.scrollTop = movelistEl.scrollHeight;
@@ -1702,12 +1726,19 @@ __PUZZLES_SOURCE__
     return false;
   }
 
-  // --- Stockfish worker ---
-  // One worker serves both live play and post-game analysis, so every request
-  // funnels through engineGo(): at most one is in flight, each carries a
-  // generation stamp, and cancelEngineWork() invalidates anything pending.
-  // Without that, an analysis pass running in the background could swallow the
-  // bestmove meant for a live move (hanging the game) or vice versa.
+  // --- Live-play engine (old, weak, single-threaded — deliberately so) ---
+  // Used only for the opponent's own moves via requestEngineMove()/engineGo().
+  // A strong engine would be wasted here anyway, since Skill Level already
+  // deliberately weakens play to match the adaptive rating — this build's
+  // small size and instant startup matter far more than its ceiling.
+  // Real analysis (post-game, drill, calibration) uses a separate, much
+  // stronger, lazily-loaded engine below (see "Analysis engine").
+  //
+  // Every live-play request funnels through engineGo(): at most one is in
+  // flight, each carries a generation stamp, and cancelEngineWork() (shared
+  // with the analysis engine) invalidates anything pending on either engine.
+  // Without that, a request meant for one engine could swallow a bestmove
+  // meant for the other, or for a stale, already-superseded position.
   let engine = null;
   let engineQueue = [];       // run-fns waiting for the engine's first readyok
   let currentRequest = null;  // {resolve, timer} for the single in-flight `go`
@@ -1799,7 +1830,7 @@ __PUZZLES_SOURCE__
   // Invalidates any in-flight or queued engine work. Called whenever the game
   // state the work referred to stops being current (new game, undo, resign).
   function cancelEngineWork() {
-    engineGeneration++;
+    engineGeneration++; // one shared counter — invalidates in-flight work on both engines
     engineQueue.length = 0;
     if (currentRequest) {
       const req = currentRequest;
@@ -1809,6 +1840,16 @@ __PUZZLES_SOURCE__
     }
     if (engine && engineReady) engine.postMessage('stop');
     engineThinking = false;
+
+    analysisEngineQueue.length = 0;
+    if (analysisCurrentRequest) {
+      const req = analysisCurrentRequest;
+      analysisCurrentRequest = null;
+      clearTimeout(req.timer);
+      req.resolve(null);
+    }
+    if (analysisEngine && analysisEngineReady) analysisEngine.postMessage('stop');
+
     setAnalysisProgress(null);
   }
 
@@ -1839,6 +1880,94 @@ __PUZZLES_SOURCE__
     engineThinking = false;
     if (!res || !res.bestMove) { renderStatus(); return; }
     applyEngineMove(res.bestMove);
+  }
+
+  // --- Analysis engine (Stockfish 18, NNUE) ---
+  // Separate from the live-play engine above, and lazy: nothing is fetched
+  // or instantiated until analysis/drill/calibration actually runs, since
+  // most visits play a live game and never touch those. Always at full
+  // strength — no Skill Level limiting, unlike live play.
+  let analysisEngine = null;
+  let analysisEngineReady = false;
+  let analysisEngineLoadPromise = null;
+  let analysisEngineQueue = [];
+  let analysisCurrentRequest = null;
+  let analysisLastInfoScore = null;
+
+  function initAnalysisEngine() {
+    if (analysisEngineLoadPromise) return analysisEngineLoadPromise;
+    toast('Loading the analysis engine (first time only, ~7MB)…');
+    analysisEngineLoadPromise = new Promise((resolve) => {
+      const src = document.getElementById('analysis-engine-src').textContent;
+      // This build reads its wasm's location from the worker's own URL hash
+      // fragment (see build/build.py's comment) — the wasm ships as a
+      // sibling file next to index.html rather than inlined.
+      const wasmUrl = new URL('stockfish-18-lite-single.wasm', document.baseURI).href;
+      const blob = new Blob([src], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(blob) + '#' + encodeURIComponent(wasmUrl);
+      analysisEngine = new Worker(workerUrl);
+      analysisEngine.onmessage = (e) => {
+        const line = typeof e.data === 'string' ? e.data : '';
+        if (line === 'uciok') {
+          analysisEngine.postMessage('isready');
+        } else if (line === 'readyok') {
+          analysisEngineReady = true;
+          resolve();
+          const queued = analysisEngineQueue.slice();
+          analysisEngineQueue.length = 0;
+          for (const fn of queued) fn();
+        } else if (line.startsWith('info')) {
+          const m = line.match(/score (cp|mate) (-?\d+)/);
+          if (m) analysisLastInfoScore = { type: m[1], value: parseInt(m[2], 10) };
+        } else if (line.startsWith('bestmove')) {
+          const req = analysisCurrentRequest;
+          if (!req) return;
+          analysisCurrentRequest = null;
+          clearTimeout(req.timer);
+          const score = analysisLastInfoScore;
+          analysisLastInfoScore = null;
+          req.resolve({ bestMove: line.split(' ')[1], score });
+        }
+      };
+      analysisEngine.onerror = (err) => {
+        console.error('Analysis engine failed to load', err);
+        resolve(); // don't hang callers forever — they see analysisEngineReady still false
+      };
+      analysisEngine.postMessage('uci');
+    });
+    return analysisEngineLoadPromise;
+  }
+
+  // Same shape/contract as engineGo() (used for live play), but against the
+  // stronger lazy-loaded engine and always at full strength.
+  async function analysisEngineGo(fen, movetime) {
+    const terminal = terminalPositionScore(fen);
+    if (terminal) return terminal;
+    await initAnalysisEngine();
+    if (!analysisEngineReady) return null;
+    return new Promise((resolve) => {
+      const run = () => {
+        if (analysisCurrentRequest) {
+          const prev = analysisCurrentRequest;
+          analysisCurrentRequest = null;
+          clearTimeout(prev.timer);
+          prev.resolve(null);
+        }
+        const req = { resolve, timer: null };
+        req.timer = setTimeout(() => {
+          if (analysisCurrentRequest === req) {
+            analysisCurrentRequest = null;
+            console.warn('Analysis engine timed out for', fen);
+            resolve(null);
+          }
+        }, movetime + 10000);
+        analysisCurrentRequest = req;
+        analysisLastInfoScore = null;
+        analysisEngine.postMessage('position fen ' + fen);
+        analysisEngine.postMessage('go movetime ' + movetime);
+      };
+      if (analysisEngineReady) run(); else analysisEngineQueue.push(run);
+    });
   }
 
   // --- Progress / history panel ---
@@ -2003,6 +2132,95 @@ __PUZZLES_SOURCE__
     const cell = e.target.closest('.mv');
     if (cell && cell.dataset.ply) { e.preventDefault(); enterReview(parseInt(cell.dataset.ply, 10)); }
   });
+
+  // --- Hover: arrow + instant analysis readout ---
+  // mouseover/mouseout (not mouseenter/mouseleave) since those don't bubble,
+  // and event delegation on movelistEl is what lets a single pair of
+  // listeners cover every move cell, including ones added after a re-render.
+  movelistEl.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('.mv');
+    if (cell && cell.dataset.from) showMoveHover(cell);
+  });
+  movelistEl.addEventListener('mouseout', (e) => {
+    const cell = e.target.closest('.mv');
+    if (cell && !cell.contains(e.relatedTarget)) hideMoveHover();
+  });
+  movelistEl.addEventListener('focusin', (e) => {
+    const cell = e.target.closest('.mv');
+    if (cell && cell.dataset.from) showMoveHover(cell);
+  });
+  movelistEl.addEventListener('focusout', (e) => {
+    const cell = e.target.closest('.mv');
+    if (cell && !cell.contains(e.relatedTarget)) hideMoveHover();
+  });
+
+  function showMoveHover(cell) {
+    drawMoveArrow(cell.dataset.from, cell.dataset.to, cell.className);
+    const ply = parseInt(cell.dataset.ply, 10);
+    const analysis = activeAnalysis();
+    const q = analysis && analysis.moveQuality.find((m) => m.ply === ply);
+    const el = document.getElementById('move-hover-info');
+    if (q) {
+      el.textContent = cell.textContent.trim() + ': ' + q.tag +
+        (q.loss ? ' (−' + (q.loss / 100).toFixed(2) + ')' : '') +
+        (q.best && q.best !== q.san ? ' — engine preferred ' + q.best : '');
+    } else {
+      el.textContent = cell.textContent.trim() + ' — not analyzed';
+    }
+  }
+
+  function hideMoveHover() {
+    document.getElementById('move-arrow-overlay').style.display = 'none';
+    document.getElementById('move-hover-info').textContent = '';
+  }
+
+  // Draws a single arrow from one square's center to another's, reading
+  // actual on-screen positions so it lines up regardless of board size or
+  // whether the board is flipped. cellClassName carries the q-* tag class
+  // (if any) so the arrow's color matches the move-list's own color coding.
+  function drawMoveArrow(from, to, cellClassName) {
+    const svg = document.getElementById('move-arrow-overlay');
+    const fromEl = boardEl.querySelector('[data-square="' + from + '"]');
+    const toEl = boardEl.querySelector('[data-square="' + to + '"]');
+    if (!fromEl || !toEl) { svg.style.display = 'none'; return; }
+    // The SVG's own rect (not its padded parent's) is what the viewBox
+    // coordinates map onto — it's already inset to exactly match .board.
+    const frameRect = svg.getBoundingClientRect();
+    const a = fromEl.getBoundingClientRect();
+    const b = toEl.getBoundingClientRect();
+    const x1 = a.left + a.width / 2 - frameRect.left;
+    const y1 = a.top + a.height / 2 - frameRect.top;
+    const x2 = b.left + b.width / 2 - frameRect.left;
+    const y2 = b.top + b.height / 2 - frameRect.top;
+
+    const color = /q-blunder|q-mistake/.test(cellClassName) ? 'var(--danger)'
+      : /q-inaccuracy/.test(cellClassName) ? 'var(--brass)'
+      : /q-best|q-good/.test(cellClassName) ? 'var(--felt)'
+      : 'var(--brass)';
+
+    // Shorten the line so the arrowhead doesn't bury itself under the
+    // destination square's piece glyph.
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const pullBack = Math.min(a.width * 0.35, len * 0.4);
+    const ex = x2 - (dx / len) * pullBack;
+    const ey = y2 - (dy / len) * pullBack;
+    const headLen = a.width * 0.18;
+    const headWidth = a.width * 0.13;
+    const angle = Math.atan2(ey - y1, ex - x1);
+    const p1x = ex - headLen * Math.cos(angle - Math.PI / 7);
+    const p1y = ey - headLen * Math.sin(angle - Math.PI / 7);
+    const p2x = ex - headLen * Math.cos(angle + Math.PI / 7);
+    const p2y = ey - headLen * Math.sin(angle + Math.PI / 7);
+
+    svg.setAttribute('viewBox', '0 0 ' + frameRect.width + ' ' + frameRect.height);
+    svg.innerHTML =
+      '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + ex + '" y2="' + ey +
+        '" style="stroke:' + color + '; stroke-width:' + (a.width * 0.1) + '; stroke-linecap:round" opacity="0.85" />' +
+      '<polygon points="' + ex + ',' + ey + ' ' + p1x + ',' + p1y + ' ' + p2x + ',' + p2y +
+        '" style="fill:' + color + '" opacity="0.9" />';
+    svg.style.display = 'block';
+  }
 
   document.getElementById('btn-review-prev').addEventListener('click', () => {
     enterReview((reviewPly === null ? game.history().length : reviewPly) - 1);
