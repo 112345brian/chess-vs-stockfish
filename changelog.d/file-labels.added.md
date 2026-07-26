@@ -1,0 +1,1 @@
+File letters (a-h) along the bottom edge of the board, alongside the existing rank numbers on the left — the board previously only labeled ranks, leaving no way to read algebraic notation off the board itself.

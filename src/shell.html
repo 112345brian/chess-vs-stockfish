@@ -146,13 +146,14 @@
   .sq.dark { background: var(--board-dark); }
   .sq .coord {
     position: absolute;
-    top: 2px;
-    left: 3px;
     font-size: 0.55rem;
     font-family: var(--mono);
-    opacity: 0.45;
+    opacity: 0.55;
     pointer-events: none;
+    font-weight: 600;
   }
+  .sq .coord-rank { top: 2px; left: 3px; }
+  .sq .coord-file { bottom: 2px; right: 3px; }
   .sq.selected { box-shadow: inset 0 0 0 3px var(--brass); }
   .sq.last-move { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--felt) 70%, transparent); }
   .sq.legal::after {
@@ -1048,9 +1049,15 @@ __PUZZLES_SOURCE__
 
         if (colPos === 0) {
           const c = document.createElement('span');
-          c.className = 'coord';
+          c.className = 'coord coord-rank';
           c.textContent = rank;
           div.appendChild(c);
+        }
+        if (rowPos === 7) {
+          const f = document.createElement('span');
+          f.className = 'coord coord-file';
+          f.textContent = file;
+          div.appendChild(f);
         }
 
         if (cell) {
@@ -1456,9 +1463,15 @@ __PUZZLES_SOURCE__
 
         if (colPos === 0) {
           const c = document.createElement('span');
-          c.className = 'coord';
+          c.className = 'coord coord-rank';
           c.textContent = rank;
           div.appendChild(c);
+        }
+        if (rowPos === 7) {
+          const f = document.createElement('span');
+          f.className = 'coord coord-file';
+          f.textContent = file;
+          div.appendChild(f);
         }
         if (cell) {
           const p = document.createElement('span');
@@ -1699,7 +1712,22 @@ __PUZZLES_SOURCE__
 
   // Resolves with {bestMove, score}, or null if cancelled or the engine never
   // answers. Callers must re-check engineGeneration before acting on a result.
+  // Positions with no legal moves (checkmate/stalemate) can't be meaningfully
+  // searched, and this engine build appears to hang rather than answer when
+  // asked to — it never emits bestmove, so every caller (live play, post-game
+  // analysis, drills, calibration) would sit through a ~10s timeout for
+  // nothing. Short-circuit with a synthetic result instead of ever asking.
+  function terminalPositionScore(fen) {
+    let scratch;
+    try { scratch = new Chess(fen); } catch (e) { return null; }
+    if (!scratch.isGameOver()) return null;
+    const score = scratch.isCheckmate() ? { type: 'mate', value: -1 } : { type: 'cp', value: 0 };
+    return { bestMove: null, score };
+  }
+
   function engineGo(fen, movetime, skill) {
+    const terminal = terminalPositionScore(fen);
+    if (terminal) return Promise.resolve(terminal);
     return new Promise((resolve) => {
       const run = () => {
         if (currentRequest) {
