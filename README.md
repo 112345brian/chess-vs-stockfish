@@ -88,6 +88,20 @@ you clone this repo) as a Script Commands directory in Raycast's settings,
 then run "Chess" — it prompts Resume or New Game and opens the live URL
 above. On other platforms, just bookmark the URL directly.
 
+## Releasing
+
+Changes get a one-file fragment in `changelog.d/` in the same commit that
+makes them; releases compile pending fragments into `CHANGELOG.md`, then
+bump `VERSION` and tag. See [changelog.d/README.md](./changelog.d/README.md)
+for the full recipe — short version:
+
+```bash
+python3 scripts/build_changelog.py --version X.Y.Z --write
+git add CHANGELOG.md changelog.d/ && git commit -m "Update changelog for vX.Y.Z"
+bash scripts/bump_version.sh X.Y.Z
+git push origin main --tags
+```
+
 ## Licensing
 
 This repository bundles a GPLv3-licensed Stockfish build, so the whole
