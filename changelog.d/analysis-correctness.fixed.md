@@ -1,0 +1,1 @@
+Fixed post-game move-quality analysis using a hardcoded side-to-move instead of reading it from the actual position, and fixed a bug where starting a new game while the previous game's analysis was still running could attach that analysis to the wrong game.

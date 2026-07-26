@@ -1,0 +1,1 @@
+A review mode: click any move in the move list (or use the arrow keys) to step through a game position by position. The move list is color-coded by quality once a game is analyzed (best/good/inaccuracy/mistake/blunder), and a "Next mistake" button jumps between flagged moves with the engine's preferred alternative shown alongside yours.

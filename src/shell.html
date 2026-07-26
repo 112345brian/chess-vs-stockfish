@@ -223,6 +223,22 @@
     padding-right: 4px;
   }
   .movelist .n { color: var(--ink-400); text-align: right; }
+  .movelist .mv {
+    cursor: pointer;
+    border-radius: 3px;
+    padding: 0 3px;
+    /* Quality is carried by a leading glyph as well as colour, so the tag is
+       never colour-alone for colourblind or monochrome readers. */
+  }
+  .movelist .mv:hover { background: var(--paper-200); }
+  .movelist .mv:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  .movelist .mv-current { background: var(--paper-200); box-shadow: inset 0 0 0 1px var(--brass); }
+  .movelist .q-inaccuracy { color: var(--brass-ink); }
+  .movelist .q-mistake { color: var(--danger); }
+  .movelist .q-blunder { color: var(--danger); font-weight: 700; }
+  .movelist .q-inaccuracy::after { content: " ?!"; font-size: 0.85em; }
+  .movelist .q-mistake::after { content: " ?"; font-size: 0.85em; }
+  .movelist .q-blunder::after { content: " ??"; font-size: 0.85em; }
   .movelist .empty { grid-column: 1 / -1; color: var(--ink-400); font-family: var(--sans); font-style: italic; font-size: 0.8rem; }
 
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -284,7 +300,7 @@
   <header>
     <div>
       <h1>Chess vs. Stockfish</h1>
-      <div class="tagline">You play white. The engine runs entirely in your browser.</div>
+      <div class="tagline" id="tagline">The engine runs entirely in your browser.</div>
     </div>
     <span class="status-pill you" id="status-pill"><span class="dot"></span><span id="status-text">Loading engine&hellip;</span></span>
   </header>
@@ -314,7 +330,18 @@
             </select>
           </label>
         </div>
+        <div class="row" style="margin-bottom:10px;">
+          <label class="field">
+            Play as
+            <select id="player-color">
+              <option value="w" selected>White</option>
+              <option value="b">Black</option>
+              <option value="random">Random each game</option>
+            </select>
+          </label>
+        </div>
         <div class="hint" id="rating-display" style="margin-bottom:10px;"></div>
+        <div class="hint" id="analysis-progress" style="margin-bottom:10px; display:none;"></div>
         <div class="row">
           <button class="primary" id="btn-new" style="flex:1;">New game</button>
           <button id="btn-undo" style="flex:1;">Undo</button>
@@ -323,7 +350,13 @@
           <button id="btn-flip" style="flex:1;">Flip board</button>
           <button id="btn-pgn" style="flex:1;">Copy PGN</button>
         </div>
-        <p class="hint" style="margin-top:10px;">Your progress autosaves in this browser. Reopen this page anytime to resume &mdash; or open with <code>?new=1</code> to start fresh.</p>
+        <div class="row" style="margin-top:8px;">
+          <button id="btn-resign" style="flex:1;">Resign</button>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button id="btn-analyze-so-far" style="flex:1;">Analyze game so far</button>
+        </div>
+        <p class="hint" style="margin-top:10px;">Resigning counts as a loss. Don&rsquo;t want a game to count at all? Just start a new game instead of resigning. Your progress autosaves in this browser &mdash; reopen this page anytime to resume, or open with <code>?new=1</code> to start fresh.</p>
       </div>
 
       <div class="panel">
@@ -339,6 +372,30 @@
       <div class="panel">
         <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Moves</div>
         <div class="movelist" id="movelist"><div class="empty">No moves yet &mdash; make the first one.</div></div>
+        <div id="review-bar" style="display:none; margin-top:10px;">
+          <div class="hint" id="review-label" style="margin-bottom:8px;"></div>
+          <div class="row">
+            <button id="btn-review-prev" style="flex:1;" aria-label="Previous move">&larr;</button>
+            <button id="btn-review-next" style="flex:1;" aria-label="Next move">&rarr;</button>
+            <button id="btn-review-blunder" style="flex:2;">Next mistake</button>
+          </div>
+          <button id="btn-review-exit" style="width:100%; margin-top:8px; display:none;">Back to game</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Progress</div>
+        <div id="progress-summary" class="hint">No finished games yet.</div>
+        <button id="btn-progress-toggle" style="width:100%; margin-top:10px; display:none;">View history &darr;</button>
+        <div id="progress-detail" style="display:none; margin-top:12px;">
+          <svg id="rating-chart" viewBox="0 0 280 90" width="100%" height="90" role="img" aria-label="Rating over time" style="display:block; margin-bottom:12px;"></svg>
+          <div style="font-size:0.72rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Most-played openings</div>
+          <div id="top-openings" class="hint" style="margin-bottom:12px;"></div>
+          <div style="font-size:0.72rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Recent games</div>
+          <div class="movelist" id="recent-games" style="grid-template-columns: 1fr auto auto auto; font-size:0.75rem; margin-bottom:12px;"></div>
+          <button id="btn-export-history" style="width:100%;">Copy history for coaching</button>
+          <p class="hint" style="margin-top:8px;">Move-quality tags (best/good/inaccuracy/mistake/blunder) come from a background re-evaluation with this same engine after each game &mdash; an approximate, heuristic read, not a calibrated accuracy score.</p>
+        </div>
       </div>
     </aside>
   </main>
@@ -422,6 +479,7 @@ __OPENING_INFO_SOURCE__
   const statusText = document.getElementById('status-text');
   const movelistEl = document.getElementById('movelist');
   const strengthEl = document.getElementById('strength');
+  const colorEl = document.getElementById('player-color');
   const toastEl = document.getElementById('toast');
 
   let game = new Chess();
@@ -433,6 +491,16 @@ __OPENING_INFO_SOURCE__
   let engineThinking = false;
   let gameOver = false;
   let ratingApplied = false;
+  let resignedAsLoss = false;
+  let currentGameEntry = null; // profile entry for the game on the board, if logged
+  let reviewPly = null;        // when set, the board shows this ply instead of live play
+  let liveAnalysis = null;     // "Analyze so far" result for an unfinished game (not logged)
+  let analyzing = false;       // true while any analysis pass (finished-game or live) is running
+
+  // Whichever analysis applies to the position on the board right now.
+  function activeAnalysis() {
+    return (currentGameEntry && currentGameEntry.analysis) || liveAnalysis;
+  }
 
   // --- Adaptive rating ---
   // This engine build has no true UCI_Elo option, only a 0-20 "Skill Level"
@@ -448,14 +516,26 @@ __OPENING_INFO_SOURCE__
     [2100, 18], [2300, 19], [2600, 20]
   ];
 
-  let rating = { elo: 1200 };
-  try {
-    const raw = localStorage.getItem(RATING_KEY);
-    if (raw) rating = JSON.parse(raw);
-  } catch (e) {}
+  // loadStored is a hoisted function declaration from the profile section below.
+  let rating = loadStored(RATING_KEY, { elo: 1200, gamesPlayed: 0 },
+    (v) => v && typeof v === 'object' && typeof v.elo === 'number' && isFinite(v.elo));
+  if (typeof rating.gamesPlayed !== 'number') rating.gamesPlayed = 0; // migrate older saves
 
   function saveRating() {
     try { localStorage.setItem(RATING_KEY, JSON.stringify(rating)); } catch (e) {}
+  }
+
+  // K-factor scales down as more games are logged — like a "provisional"
+  // rating in real rating systems (USCF/FIDE use the same idea). With few
+  // games the estimate can still be badly wrong, so a loss/win streak should
+  // move it fast; once there's real history, big single-game swings would
+  // just be noise, so it settles down.
+  function currentK() {
+    const n = rating.gamesPlayed;
+    if (n < 5) return 100;
+    if (n < 15) return 50;
+    if (n < 30) return 32;
+    return 20;
   }
 
   function eloToSkill(elo) {
@@ -480,31 +560,43 @@ __OPENING_INFO_SOURCE__
   function updateRatingDisplay() {
     const el = document.getElementById('rating-display');
     if (strengthEl.value === 'adaptive') {
+      const provisional = rating.gamesPlayed < 30;
       el.textContent = 'Your estimated rating: ' + Math.round(rating.elo) +
         '. The engine plays around ' + Math.round(rating.elo + ADAPTIVE_OFFSET) +
-        ' — updates after each finished game.';
+        ' — updates after each finished game' +
+        (provisional ? ' (provisional — moves fast until you have more games logged, ' +
+          rating.gamesPlayed + ' so far)' : '') + '.';
     } else {
       el.textContent = 'Fixed opponent strength — rating tracking is paused.';
     }
   }
 
+  // Player's actual score (1 win / 0.5 draw / 0 loss), or null if the game
+  // isn't actually over. Shared by the adaptive-rating update and the game
+  // log, so both agree on what counts as a win/loss/draw.
+  function playerResultScore() {
+    if (resignedAsLoss) return 0;
+    if (game.isCheckmate()) return (game.turn() !== playerColor) ? 1 : 0;
+    if (game.isDraw() || game.isStalemate() || game.isThreefoldRepetition()) return 0.5;
+    return null;
+  }
+
+  // Returns {elo, gamesPlayed} from before the update (so undo can revert
+  // it), or null if no update applied.
   function applyAdaptiveResult() {
-    if (strengthEl.value !== 'adaptive') return;
-    let actual;
-    if (game.isCheckmate()) {
-      actual = (game.turn() !== playerColor) ? 1 : 0;
-    } else if (game.isDraw() || game.isStalemate() || game.isThreefoldRepetition()) {
-      actual = 0.5;
-    } else {
-      return;
-    }
-    const opponentElo = rating.elo + ADAPTIVE_OFFSET;
-    const expected = 1 / (1 + Math.pow(10, (opponentElo - rating.elo) / 400));
-    const K = 32;
-    rating.elo = Math.max(600, Math.min(2800, rating.elo + K * (actual - expected)));
+    if (strengthEl.value !== 'adaptive') return null;
+    const actual = playerResultScore();
+    if (actual === null) return null;
+    const before = { elo: rating.elo, gamesPlayed: rating.gamesPlayed };
+    const opponentElo = before.elo + ADAPTIVE_OFFSET;
+    const expected = 1 / (1 + Math.pow(10, (opponentElo - before.elo) / 400));
+    const K = currentK();
+    rating.elo = Math.max(400, Math.min(2900, before.elo + K * (actual - expected)));
+    rating.gamesPlayed = before.gamesPlayed + 1;
     saveRating();
     updateRatingDisplay();
     toast('Rating updated: ' + Math.round(rating.elo));
+    return before;
   }
 
   function toast(msg) {
@@ -514,9 +606,249 @@ __OPENING_INFO_SOURCE__
     toast._t = setTimeout(() => toastEl.classList.remove('show'), 1800);
   }
 
+  function setAnalysisProgress(state) {
+    const el = document.getElementById('analysis-progress');
+    if (!state) {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    el.style.display = '';
+    el.textContent = 'Analyzing your moves… ' + state.done + '/' + state.total +
+      ' (starting a new game cancels this)';
+  }
+
+  function updateTagline() {
+    document.getElementById('tagline').textContent =
+      'You play ' + (playerColor === 'w' ? 'white' : 'black') +
+      '. The engine runs entirely in your browser.';
+  }
+
+  // Resolves the "Play as" setting for a fresh game ('random' picks a side).
+  function pickPlayerColor() {
+    const choice = colorEl.value;
+    if (choice === 'random') return Math.random() < 0.5 ? 'w' : 'b';
+    return choice === 'b' ? 'b' : 'w';
+  }
+
+  function startNewGame() {
+    cancelEngineWork();
+    exitReview();
+    game = new Chess();
+    playerColor = pickPlayerColor();
+    flipped = playerColor === 'b';
+    selected = null;
+    legalTargets = [];
+    gameOver = false;
+    ratingApplied = false;
+    resignedAsLoss = false;
+    currentGameEntry = null;
+    liveAnalysis = null;
+    updateTagline();
+    save();
+    render();
+    if (game.turn() !== playerColor) requestEngineMove();
+  }
+
+  // --- Game history / profile ---
+  // Every finished game is logged automatically (same trigger as the
+  // adaptive rating update). Capped so localStorage doesn't grow forever.
+  const PROFILE_KEY = 'chess-vs-stockfish:profile:v1';
+  const PROFILE_MAX_GAMES = 200;
+  const ANALYSIS_MOVETIME = 250; // ms per position — a background pass, not live play
+
+  // Stored state is untrusted: it can be corrupt, hand-edited, or written by
+  // an older version. Validate the shape and fall back rather than letting a
+  // bad value throw during boot and take the whole page down.
+  function loadStored(key, fallback, isValid) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw);
+      return isValid(parsed) ? parsed : fallback;
+    } catch (e) {
+      console.warn('Discarding unreadable stored value for', key, e);
+      return fallback;
+    }
+  }
+
+  let profile = loadStored(PROFILE_KEY, { games: [] },
+    (v) => v && typeof v === 'object' && Array.isArray(v.games));
+
+  // Returns false if the write failed. On a quota error, drops the oldest
+  // quarter of the history and retries rather than silently losing every
+  // future save.
+  function saveProfile() {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+        return true;
+      } catch (e) {
+        if (profile.games.length > 8) {
+          profile.games = profile.games.slice(Math.ceil(profile.games.length / 4));
+        } else {
+          console.warn('Could not save profile', e);
+          toast('Could not save history — browser storage is full');
+          return false;
+        }
+      }
+    }
+    return false;
+  }
+
+  // Converts a UCI score (relative to the side to move) into a signed
+  // centipawn number from White's perspective, so consecutive plies are
+  // directly comparable regardless of whose turn it was.
+  function scoreToWhiteCp(score, whiteToMove) {
+    if (!score) return 0;
+    let cp;
+    if (score.type === 'mate') {
+      // Treat mate as a very large but finite value so arithmetic stays sane.
+      cp = score.value === 0 ? 0 : (score.value > 0 ? 100000 - score.value : -100000 - score.value);
+    } else {
+      cp = score.value;
+    }
+    return whiteToMove ? cp : -cp;
+  }
+
+  function classifyLoss(centipawnLoss) {
+    if (centipawnLoss <= 10) return 'best';
+    if (centipawnLoss <= 25) return 'good';
+    if (centipawnLoss <= 50) return 'inaccuracy';
+    if (centipawnLoss <= 100) return 'mistake';
+    return 'blunder';
+  }
+
+  function fenSideToMove(fen) {
+    return fen.split(' ')[1] === 'b' ? 'b' : 'w';
+  }
+
+  // Converts a UCI bestmove to SAN in the context of the given FEN, so the
+  // review panel can show "engine preferred Nf3" rather than "g1f3".
+  function uciToSan(fen, uciMove) {
+    if (!uciMove || uciMove.length < 4) return null;
+    try {
+      const tmp = new Chess(fen);
+      const mv = tmp.move({
+        from: uciMove.slice(0, 2),
+        to: uciMove.slice(2, 4),
+        promotion: uciMove.length > 4 ? uciMove[4] : undefined,
+      });
+      return mv ? mv.san : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Re-evaluates each of the player's own moves after the game ends: the eval
+  // just before the move vs. just after, both normalised to White's
+  // perspective, giving a centipawn-loss figure per move (the same idea behind
+  // Lichess/Chess.com accuracy tools). Approximate and heuristic — the buckets
+  // are informal, not a calibrated accuracy score.
+  //
+  // Takes the move list as an argument rather than reading `game`, since this
+  // runs across many awaits and `game` may have been replaced meanwhile.
+  async function analyzeMoves(verboseHistory, color) {
+    const gen = engineGeneration;
+    const playerMoves = verboseHistory.filter((m) => m.color === color);
+    if (!playerMoves.length) return null;
+
+    const moveQuality = [];
+    let totalLoss = 0;
+    for (let i = 0; i < playerMoves.length; i++) {
+      const mv = playerMoves[i];
+      setAnalysisProgress({ done: i, total: playerMoves.length });
+
+      const evalBefore = await engineGo(mv.before, ANALYSIS_MOVETIME, 20);
+      if (gen !== engineGeneration) return null;
+      const evalAfter = await engineGo(mv.after, ANALYSIS_MOVETIME, 20);
+      if (gen !== engineGeneration) return null;
+      if (!evalBefore || !evalAfter) return null; // engine timed out
+
+      const whiteBefore = scoreToWhiteCp(evalBefore.score, fenSideToMove(mv.before) === 'w');
+      const whiteAfter = scoreToWhiteCp(evalAfter.score, fenSideToMove(mv.after) === 'w');
+      const loss = color === 'w'
+        ? Math.max(0, whiteBefore - whiteAfter)
+        : Math.max(0, whiteAfter - whiteBefore);
+
+      totalLoss += loss;
+      moveQuality.push({
+        san: mv.san,
+        ply: verboseHistory.indexOf(mv) + 1,
+        loss: Math.round(loss),
+        tag: classifyLoss(loss),
+        best: uciToSan(mv.before, evalBefore.bestMove),
+      });
+    }
+    setAnalysisProgress(null);
+
+    const counts = { best: 0, good: 0, inaccuracy: 0, mistake: 0, blunder: 0 };
+    for (const m of moveQuality) counts[m.tag]++;
+    return { moveQuality, counts, acpl: Math.round(totalLoss / playerMoves.length) };
+  }
+
+  // Logs the finished game immediately, then fills in the analysis when it
+  // completes. Logging first means a game still gets recorded even if the
+  // analysis pass is cancelled (new game) or the engine stalls.
+  // `ratingSnapshotBefore` is applyAdaptiveResult()'s {elo, gamesPlayed}
+  // return value (or null if adaptive mode wasn't active) — kept so Undo can
+  // restore both fields exactly rather than guessing.
+  async function logFinishedGame(ratingSnapshotBefore) {
+    const actual = playerResultScore();
+    if (actual === null) return;
+
+    const hit = currentOpening();
+    const verboseHistory = game.history({ verbose: true });
+    const color = playerColor;
+
+    const entry = {
+      date: new Date().toISOString(),
+      result: actual === 1 ? 'win' : actual === 0 ? 'loss' : 'draw',
+      color: color,
+      ratingSnapshotBefore: ratingSnapshotBefore || null,
+      ratingBefore: ratingSnapshotBefore ? Math.round(ratingSnapshotBefore.elo) : null,
+      ratingAfter: Math.round(rating.elo),
+      opponentMode: strengthEl.value,
+      opponentElo: Math.round(currentOpponentElo()),
+      opening: hit ? hit.name : null,
+      eco: hit ? hit.eco : null,
+      plyCount: verboseHistory.length,
+      pgn: game.pgn(),
+      analysis: null,
+    };
+    profile.games.push(entry);
+    if (profile.games.length > PROFILE_MAX_GAMES) {
+      profile.games = profile.games.slice(-PROFILE_MAX_GAMES);
+    }
+    currentGameEntry = entry;
+    saveProfile();
+    renderHistoryPanel();
+
+    let analysis = null;
+    analyzing = true;
+    try {
+      analysis = await analyzeMoves(verboseHistory, color);
+    } catch (e) {
+      console.error('Post-game analysis failed', e);
+    } finally {
+      analyzing = false;
+      setAnalysisProgress(null);
+    }
+    if (!analysis) return; // cancelled or failed — the game itself is still logged
+
+    entry.analysis = analysis;
+    saveProfile();
+    renderHistoryPanel();
+    renderMoveList();
+    toast('Analysis done — ACPL ' + analysis.acpl + ', ' + analysis.counts.blunder + ' blunder(s)');
+  }
+
   function save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ pgn: game.pgn(), flipped, strength: strengthEl.value }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        pgn: game.pgn(), flipped, strength: strengthEl.value, resignedAsLoss,
+        playerColor, colorChoice: colorEl.value,
+      }));
     } catch (e) {}
   }
 
@@ -531,6 +863,9 @@ __OPENING_INFO_SOURCE__
         game = g;
         flipped = !!data.flipped;
         if (data.strength) strengthEl.value = data.strength;
+        if (data.colorChoice) colorEl.value = data.colorChoice;
+        if (data.playerColor === 'w' || data.playerColor === 'b') playerColor = data.playerColor;
+        resignedAsLoss = !!data.resignedAsLoss;
         return true;
       }
     } catch (e) {}
@@ -541,15 +876,45 @@ __OPENING_INFO_SOURCE__
     return boardEl.querySelector('[data-square="' + square + '"]');
   }
 
+  // --- Review mode ---
+  // Rebuilds the position after `ply` half-moves so a finished game can be
+  // stepped through without disturbing `game` itself.
+  function positionAtPly(ply) {
+    const tmp = new Chess();
+    const hist = game.history();
+    for (let i = 0; i < Math.min(ply, hist.length); i++) {
+      try { tmp.move(hist[i]); } catch (e) { break; }
+    }
+    return tmp;
+  }
+
+  function enterReview(ply) {
+    const total = game.history().length;
+    if (!total) return;
+    // Stepping past the last move returns to the live board rather than
+    // leaving a review view that's identical to it.
+    if (ply >= total) { exitReview(); return; }
+    reviewPly = Math.max(0, ply);
+    render();
+  }
+
+  function exitReview() {
+    if (reviewPly === null) return;
+    reviewPly = null;
+    render();
+  }
+
   function render() {
     boardEl.innerHTML = '';
-    const board = game.board(); // 8x8, rank 8 -> rank 1
+    const inReview = reviewPly !== null;
+    const view = inReview ? positionAtPly(reviewPly) : game;
+    const board = view.board(); // 8x8, rank 8 -> rank 1
     const ranks = [0,1,2,3,4,5,6,7];
     const displayRanks = flipped ? ranks.slice().reverse() : ranks;
     const displayFiles = flipped ? FILES.slice().reverse() : FILES;
 
-    const lastMove = game.history({ verbose: true }).slice(-1)[0];
-    const inCheckColor = game.inCheck() ? game.turn() : null;
+    const lastMove = view.history({ verbose: true }).slice(-1)[0];
+    const inCheckColor = view.inCheck() ? view.turn() : null;
     let kingSquareInCheck = null;
     if (inCheckColor) {
       for (const row of board) for (const cell of row) {
@@ -610,6 +975,49 @@ __OPENING_INFO_SOURCE__
     renderMoveList();
     renderStatus();
     renderOpening();
+    renderReviewBar();
+  }
+
+  function renderReviewBar() {
+    const bar = document.getElementById('review-bar');
+    const label = document.getElementById('review-label');
+    const total = game.history().length;
+    const analysis = activeAnalysis();
+
+    if (reviewPly === null) {
+      // Offer blunder-stepping once the finished game has been analyzed.
+      const blunders = analysis
+        ? analysis.moveQuality.filter((m) => m.tag === 'blunder' || m.tag === 'mistake')
+        : [];
+      if (gameOver && blunders.length) {
+        bar.style.display = '';
+        label.textContent = blunders.length + ' mistake(s) to review — click a move, or step through them';
+      } else if (total) {
+        bar.style.display = '';
+        label.textContent = 'Click any move to review the position';
+      } else {
+        bar.style.display = 'none';
+      }
+      document.getElementById('btn-review-exit').style.display = 'none';
+      return;
+    }
+
+    bar.style.display = '';
+    document.getElementById('btn-review-exit').style.display = '';
+    const hist = game.history();
+    const san = reviewPly > 0 ? hist[reviewPly - 1] : null;
+    let text = reviewPly === 0 ? 'Starting position' : ('After ' + moveNumberLabel(reviewPly) + ' ' + san);
+    const q = analysis && analysis.moveQuality.find((m) => m.ply === reviewPly);
+    if (q) {
+      text += ' — ' + q.tag + (q.loss ? ' (−' + (q.loss / 100).toFixed(2) + ')' : '');
+      if (q.best && q.best !== q.san) text += ', engine preferred ' + q.best;
+    }
+    label.textContent = text;
+  }
+
+  function moveNumberLabel(ply) {
+    const moveNo = Math.ceil(ply / 2);
+    return moveNo + (ply % 2 === 1 ? '.' : '...');
   }
 
   function renderOpening() {
@@ -638,23 +1046,47 @@ __OPENING_INFO_SOURCE__
       movelistEl.innerHTML = '<div class="empty">No moves yet &mdash; make the first one.</div>';
       return;
     }
+    const analysis = activeAnalysis();
+    const qualityByPly = new Map();
+    if (analysis) for (const m of analysis.moveQuality) qualityByPly.set(m.ply, m);
+
+    const cell = (san, ply) => {
+      if (!san) return '<div></div>';
+      const q = qualityByPly.get(ply);
+      const cls = ['mv'];
+      if (q) cls.push('q-' + q.tag);
+      if (reviewPly === ply) cls.push('mv-current');
+      const title = q
+        ? q.tag + (q.loss ? ' (−' + (q.loss / 100).toFixed(2) + ')' : '') +
+          (q.best && q.best !== q.san ? ', engine preferred ' + q.best : '')
+        : 'Click to review';
+      return '<div class="' + cls.join(' ') + '" data-ply="' + ply + '" role="button" tabindex="0" title="' +
+        title.replace(/"/g, '&quot;') + '">' + san + '</div>';
+    };
+
     let html = '';
     for (let i = 0; i < hist.length; i += 2) {
-      const n = i / 2 + 1;
-      const w = hist[i] || '';
-      const b = hist[i + 1] || '';
-      html += '<div class="n">' + n + '.</div><div>' + w + '</div><div>' + b + '</div>';
+      html += '<div class="n">' + (i / 2 + 1) + '.</div>' + cell(hist[i], i + 1) + cell(hist[i + 1], i + 2);
     }
     movelistEl.innerHTML = html;
-    movelistEl.scrollTop = movelistEl.scrollHeight;
+    if (reviewPly === null) movelistEl.scrollTop = movelistEl.scrollHeight;
   }
 
   function renderStatus() {
     statusPill.classList.remove('thinking', 'over', 'you');
+    document.getElementById('btn-resign').disabled = gameOver;
+    document.getElementById('btn-analyze-so-far').disabled = gameOver || analyzing || !game.history().length;
+
+    if (reviewPly !== null) {
+      statusText.textContent = 'Reviewing — ' + moveNumberLabel(reviewPly || 1) +
+        ' of ' + Math.ceil(game.history().length / 2);
+      return;
+    }
     if (gameOver) {
       statusPill.classList.add('over');
       let msg = 'Game over';
-      if (game.isCheckmate()) msg = (game.turn() === 'w' ? 'Black' : 'White') + ' wins by checkmate';
+      if (resignedAsLoss) msg = 'You resigned';
+      else if (game.isCheckmate()) msg = (game.turn() === 'w' ? 'Black' : 'White') + ' wins by checkmate';
       else if (game.isStalemate()) msg = 'Draw by stalemate';
       else if (game.isDraw()) msg = 'Draw';
       statusText.textContent = msg;
@@ -674,7 +1106,7 @@ __OPENING_INFO_SOURCE__
   }
 
   function onSquareClick(square) {
-    if (gameOver || engineThinking || game.turn() !== playerColor) return;
+    if (reviewPly !== null || gameOver || engineThinking || analyzing || game.turn() !== playerColor) return;
 
     if (selected) {
       const move = legalTargets.find(m => m.to === square);
@@ -714,11 +1146,13 @@ __OPENING_INFO_SOURCE__
   }
 
   function checkGameOver() {
+    if (resignedAsLoss) return true;
     if (game.isGameOver()) {
       gameOver = true;
       if (!ratingApplied) {
         ratingApplied = true;
-        applyAdaptiveResult();
+        const ratingBefore = applyAdaptiveResult();
+        logFinishedGame(ratingBefore);
       }
       render();
       return true;
@@ -728,8 +1162,16 @@ __OPENING_INFO_SOURCE__
   }
 
   // --- Stockfish worker ---
+  // One worker serves both live play and post-game analysis, so every request
+  // funnels through engineGo(): at most one is in flight, each carries a
+  // generation stamp, and cancelEngineWork() invalidates anything pending.
+  // Without that, an analysis pass running in the background could swallow the
+  // bestmove meant for a live move (hanging the game) or vice versa.
   let engine = null;
-  let engineQueue = [];
+  let engineQueue = [];       // run-fns waiting for the engine's first readyok
+  let currentRequest = null;  // {resolve, timer} for the single in-flight `go`
+  let lastInfoScore = null;   // {type: 'cp'|'mate', value} from the latest info line
+  let engineGeneration = 0;   // bumped by cancelEngineWork(); stale results are dropped
 
   function initEngine() {
     const src = document.getElementById('stockfish-src').textContent;
@@ -742,22 +1184,79 @@ __OPENING_INFO_SOURCE__
       } else if (line === 'readyok') {
         engineReady = true;
         renderStatus();
-        if (engineQueue.length) { const fn = engineQueue.shift(); fn(); }
+        // Drain everything queued before the engine was ready — leaving items
+        // stranded here used to hang the first move after a slow start.
+        const queued = engineQueue.slice();
+        engineQueue.length = 0;
+        for (const fn of queued) fn();
+      } else if (line.startsWith('info')) {
+        const m = line.match(/score (cp|mate) (-?\d+)/);
+        if (m) lastInfoScore = { type: m[1], value: parseInt(m[2], 10) };
       } else if (line.startsWith('bestmove')) {
-        const parts = line.split(' ');
-        const uciMove = parts[1];
-        applyEngineMove(uciMove);
+        const req = currentRequest;
+        if (!req) return; // nothing waiting (already cancelled or timed out)
+        currentRequest = null;
+        clearTimeout(req.timer);
+        const score = lastInfoScore;
+        lastInfoScore = null;
+        req.resolve({ bestMove: line.split(' ')[1], score });
       }
     };
     engine.onerror = (err) => {
       statusText.textContent = 'Engine failed to load';
       console.error('Stockfish worker error', err);
+      cancelEngineWork();
     };
     engine.postMessage('uci');
   }
 
-  function applyEngineMove(uciMove) {
+  // Resolves with {bestMove, score}, or null if cancelled or the engine never
+  // answers. Callers must re-check engineGeneration before acting on a result.
+  function engineGo(fen, movetime, skill) {
+    return new Promise((resolve) => {
+      const run = () => {
+        if (currentRequest) {
+          // Shouldn't happen (callers await), but never leave one dangling.
+          const prev = currentRequest;
+          currentRequest = null;
+          clearTimeout(prev.timer);
+          prev.resolve(null);
+        }
+        const req = { resolve, timer: null };
+        req.timer = setTimeout(() => {
+          if (currentRequest === req) {
+            currentRequest = null;
+            console.warn('Engine timed out for', fen);
+            resolve(null);
+          }
+        }, movetime + 10000);
+        currentRequest = req;
+        lastInfoScore = null;
+        engine.postMessage('setoption name Skill Level value ' + skill);
+        engine.postMessage('position fen ' + fen);
+        engine.postMessage('go movetime ' + movetime);
+      };
+      if (engineReady) run(); else engineQueue.push(run);
+    });
+  }
+
+  // Invalidates any in-flight or queued engine work. Called whenever the game
+  // state the work referred to stops being current (new game, undo, resign).
+  function cancelEngineWork() {
+    engineGeneration++;
+    engineQueue.length = 0;
+    if (currentRequest) {
+      const req = currentRequest;
+      currentRequest = null;
+      clearTimeout(req.timer);
+      req.resolve(null);
+    }
+    if (engine && engineReady) engine.postMessage('stop');
     engineThinking = false;
+    setAnalysisProgress(null);
+  }
+
+  function applyEngineMove(uciMove) {
     if (!uciMove || uciMove === '(none)') { checkGameOver(); renderStatus(); return; }
     const from = uciMove.slice(0, 2);
     const to = uciMove.slice(2, 4);
@@ -772,34 +1271,147 @@ __OPENING_INFO_SOURCE__
     checkGameOver();
   }
 
-  function requestEngineMove() {
+  async function requestEngineMove() {
     if (!engine) return;
+    const gen = engineGeneration;
     engineThinking = true;
     renderStatus();
-    const targetElo = currentOpponentElo();
-    const skill = eloToSkill(targetElo);
+    const skill = eloToSkill(currentOpponentElo());
     const movetime = Math.round(150 + skill * 45);
-    const run = () => {
-      engine.postMessage('setoption name Skill Level value ' + skill);
-      engine.postMessage('position fen ' + game.fen());
-      engine.postMessage('go movetime ' + movetime);
-    };
-    if (engineReady) run(); else engineQueue.push(run);
+    const res = await engineGo(game.fen(), movetime, skill);
+    if (gen !== engineGeneration) return; // superseded by a new game / undo / resign
+    engineThinking = false;
+    if (!res || !res.bestMove) { renderStatus(); return; }
+    applyEngineMove(res.bestMove);
+  }
+
+  // --- Progress / history panel ---
+  function renderHistoryPanel() {
+    const games = profile.games;
+    const summaryEl = document.getElementById('progress-summary');
+    const toggleBtn = document.getElementById('btn-progress-toggle');
+
+    if (!games.length) {
+      summaryEl.textContent = 'No finished games yet.';
+      toggleBtn.style.display = 'none';
+      return;
+    }
+
+    const wins = games.filter((g) => g.result === 'win').length;
+    const losses = games.filter((g) => g.result === 'loss').length;
+    const draws = games.filter((g) => g.result === 'draw').length;
+    const latestRating = games[games.length - 1].ratingAfter;
+    summaryEl.textContent = games.length + (games.length === 1 ? ' game — ' : ' games — ') +
+      wins + 'W–' + draws + 'D–' + losses + 'L — rating ' + latestRating;
+    toggleBtn.style.display = '';
+
+    renderRatingChart(games);
+    renderTopOpenings(games);
+    renderRecentGames(games);
+  }
+
+  function renderRatingChart(games) {
+    const svg = document.getElementById('rating-chart');
+    const w = 280, h = 90, pad = 8;
+    const ratings = games.map((g) => g.ratingAfter);
+    const min = Math.min(...ratings);
+    const max = Math.max(...ratings);
+    const range = Math.max(1, max - min);
+    const stepX = games.length > 1 ? (w - pad * 2) / (games.length - 1) : 0;
+    const points = ratings.map((r, i) => [
+      pad + i * stepX,
+      h - pad - ((r - min) / range) * (h - pad * 2),
+    ]);
+
+    let svgContent = '<line x1="' + pad + '" y1="' + (h / 2) + '" x2="' + (w - pad) + '" y2="' + (h / 2) +
+      '" style="stroke:var(--paper-200); stroke-width:1" />';
+    const pathD = points.map((p, i) => (i === 0 ? 'M' : 'L') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    svgContent += '<path d="' + pathD + '" fill="none" style="stroke:var(--brass); stroke-width:2; stroke-linecap:round; stroke-linejoin:round" />';
+    points.forEach((p, i) => {
+      const isLast = i === points.length - 1;
+      const title = 'Game ' + (i + 1) + ': ' + ratings[i] + ' (' + games[i].result + ')';
+      svgContent += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + (isLast ? 3.5 : 2) +
+        '" style="fill:var(--brass)"><title>' + title + '</title></circle>';
+    });
+    svg.innerHTML = svgContent;
+  }
+
+  function renderTopOpenings(games) {
+    const counts = {};
+    for (const g of games) {
+      if (g.opening) counts[g.opening] = (counts[g.opening] || 0) + 1;
+    }
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const el = document.getElementById('top-openings');
+    el.innerHTML = sorted.length
+      ? sorted.map(([name, count]) => '<div>' + name + ' — ' + count + '</div>').join('')
+      : 'No named openings yet.';
+  }
+
+  function renderRecentGames(games) {
+    const el = document.getElementById('recent-games');
+    const recent = games.slice(-8).reverse();
+    let html = '<div class="n">Date</div><div>Result</div><div>Rating</div><div>ACPL</div>';
+    for (const g of recent) {
+      const d = new Date(g.date);
+      const dateStr = (d.getMonth() + 1) + '/' + d.getDate();
+      const resultLabel = g.result === 'win' ? 'W' : g.result === 'loss' ? 'L' : 'D';
+      const acpl = g.analysis ? g.analysis.acpl : '—';
+      html += '<div class="n">' + dateStr + '</div><div>' + resultLabel + '</div><div>' + g.ratingAfter + '</div><div>' + acpl + '</div>';
+    }
+    el.innerHTML = html;
   }
 
   // --- Controls ---
   document.getElementById('btn-new').addEventListener('click', () => {
-    game = new Chess();
+    startNewGame();
+  });
+
+  // Removes the logged entry for the game on the board and reverts the rating
+  // change it caused. Without this, undoing after a finished game and playing
+  // on would log the same game twice and apply the rating delta twice.
+  function unlogCurrentGame() {
+    if (!currentGameEntry) return;
+    const idx = profile.games.indexOf(currentGameEntry);
+    if (idx !== -1) profile.games.splice(idx, 1);
+    const snap = currentGameEntry.ratingSnapshotBefore;
+    if (snap && typeof snap.elo === 'number') {
+      rating.elo = snap.elo;
+      rating.gamesPlayed = typeof snap.gamesPlayed === 'number' ? snap.gamesPlayed : Math.max(0, rating.gamesPlayed - 1);
+      saveRating();
+      updateRatingDisplay();
+    }
+    currentGameEntry = null;
+    saveProfile();
+    renderHistoryPanel();
+  }
+
+  document.getElementById('btn-undo').addEventListener('click', () => {
+    if (resignedAsLoss) return;
+    cancelEngineWork();
+    exitReview();
+    unlogCurrentGame();
+    // Step back to the player's own turn: drop the engine reply (if any) and
+    // then the player's move. undo() is a no-op when there's nothing to take
+    // back, so this is safe at the very start of a game too.
+    if (game.turn() !== playerColor) game.undo();
+    game.undo();
     selected = null; legalTargets = []; gameOver = false; ratingApplied = false;
+    liveAnalysis = null;
     save();
     render();
   });
 
-  document.getElementById('btn-undo').addEventListener('click', () => {
-    if (engineThinking) return;
-    game.undo(); // undo engine move
-    game.undo(); // undo player move
-    selected = null; legalTargets = []; gameOver = false; ratingApplied = false;
+  document.getElementById('btn-resign').addEventListener('click', () => {
+    if (gameOver) return;
+    cancelEngineWork(); // stop any move the engine is still thinking about
+    resignedAsLoss = true;
+    gameOver = true;
+    if (!ratingApplied) {
+      ratingApplied = true;
+      const ratingBefore = applyAdaptiveResult();
+      logFinishedGame(ratingBefore);
+    }
     save();
     render();
   });
@@ -807,6 +1419,84 @@ __OPENING_INFO_SOURCE__
   strengthEl.addEventListener('change', () => {
     updateRatingDisplay();
     save();
+  });
+
+  colorEl.addEventListener('change', () => {
+    save();
+    if (game.history().length === 0 && !gameOver) {
+      startNewGame(); // no moves yet, so switching sides now is free
+    } else {
+      toast('Applies to your next game');
+    }
+  });
+
+  // --- Review navigation ---
+  movelistEl.addEventListener('click', (e) => {
+    const cell = e.target.closest('.mv');
+    if (cell && cell.dataset.ply) enterReview(parseInt(cell.dataset.ply, 10));
+  });
+  movelistEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const cell = e.target.closest('.mv');
+    if (cell && cell.dataset.ply) { e.preventDefault(); enterReview(parseInt(cell.dataset.ply, 10)); }
+  });
+
+  document.getElementById('btn-review-prev').addEventListener('click', () => {
+    enterReview((reviewPly === null ? game.history().length : reviewPly) - 1);
+  });
+  document.getElementById('btn-review-next').addEventListener('click', () => {
+    enterReview((reviewPly === null ? game.history().length : reviewPly) + 1);
+  });
+  document.getElementById('btn-review-exit').addEventListener('click', exitReview);
+
+  document.getElementById('btn-review-blunder').addEventListener('click', () => {
+    const analysis = activeAnalysis();
+    if (!analysis) { toast('No analysis for this game yet'); return; }
+    const flagged = analysis.moveQuality
+      .filter((m) => m.tag === 'blunder' || m.tag === 'mistake')
+      .map((m) => m.ply)
+      .sort((a, b) => a - b);
+    if (!flagged.length) { toast('No mistakes flagged — nice game'); return; }
+    const from = reviewPly === null ? 0 : reviewPly;
+    const next = flagged.find((p) => p > from);
+    enterReview(next === undefined ? flagged[0] : next); // wrap around
+  });
+
+  document.getElementById('btn-analyze-so-far').addEventListener('click', async () => {
+    if (analyzing || engineThinking) { toast('Wait for the current move/analysis to finish'); return; }
+    if (!game.history().length) { toast('No moves yet'); return; }
+    if (gameOver) { toast('Game already logged with its own analysis below'); return; }
+
+    analyzing = true;
+    const gen = engineGeneration;
+    const verboseHistory = game.history({ verbose: true });
+    const color = playerColor;
+    try {
+      const result = await analyzeMoves(verboseHistory, color);
+      if (gen !== engineGeneration) return; // game changed underneath us — discard
+      if (!result) { toast('Analysis was interrupted'); return; }
+      liveAnalysis = result;
+      renderMoveList();
+      renderReviewBar();
+      renderHistoryPanel();
+      toast('So far: ACPL ' + result.acpl + ', ' + result.counts.blunder + ' blunder(s)');
+    } finally {
+      analyzing = false;
+      setAnalysisProgress(null);
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      enterReview((reviewPly === null ? game.history().length : reviewPly) - 1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      enterReview((reviewPly === null ? game.history().length : reviewPly) + 1);
+    } else if (e.key === 'Escape') {
+      exitReview();
+    }
   });
 
   document.getElementById('btn-flip').addEventListener('click', () => {
@@ -853,6 +1543,40 @@ __OPENING_INFO_SOURCE__
     }
   });
 
+  document.getElementById('btn-progress-toggle').addEventListener('click', () => {
+    const detail = document.getElementById('progress-detail');
+    const btn = document.getElementById('btn-progress-toggle');
+    const isOpen = detail.style.display !== 'none';
+    detail.style.display = isOpen ? 'none' : '';
+    btn.textContent = isOpen ? 'View history ↓' : 'Hide history ↑';
+  });
+
+  document.getElementById('btn-export-history').addEventListener('click', async () => {
+    const summary = profile.games.map((g, i) => ({
+      game: i + 1,
+      date: g.date,
+      result: g.result,
+      rating: g.ratingAfter,
+      opponentElo: g.opponentElo,
+      opening: g.opening,
+      eco: g.eco,
+      plyCount: g.plyCount,
+      acpl: g.analysis ? g.analysis.acpl : null,
+      blunders: g.analysis ? g.analysis.counts.blunder : null,
+      mistakes: g.analysis ? g.analysis.counts.mistake : null,
+      inaccuracies: g.analysis ? g.analysis.counts.inaccuracy : null,
+    }));
+    const promptText = 'Here is my chess game history from Chess vs. Stockfish (' + profile.games.length +
+      ' games). Please analyze my progression and play style — recurring weaknesses, opening ' +
+      'repertoire, rating trend — and coach me on what to work on.\n\n' + JSON.stringify(summary, null, 2);
+    try {
+      await navigator.clipboard.writeText(promptText);
+      toast('History copied — paste it in chat for coaching');
+    } catch (e) {
+      toast('Copy failed — try again');
+    }
+  });
+
   // --- Boot ---
   const params = new URLSearchParams(location.search);
   if (params.get('new') === '1') {
@@ -864,6 +1588,8 @@ __OPENING_INFO_SOURCE__
 
   checkGameOver();
   updateRatingDisplay();
+  updateTagline();
+  renderHistoryPanel();
   render();
   initEngine();
 

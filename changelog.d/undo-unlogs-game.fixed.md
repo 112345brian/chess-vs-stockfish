@@ -1,0 +1,1 @@
+Fixed Undo after a finished game double-logging it and double-applying its rating change if you finished the game again. Undo now removes the logged history entry and reverts the rating (and provisional games-played count) back exactly to what it was before that game.

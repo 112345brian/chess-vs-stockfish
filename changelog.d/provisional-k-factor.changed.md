@@ -1,0 +1,1 @@
+The adaptive rating now moves much faster while it's still provisional (K-factor 100 for your first 5 games, tapering down to 20 once you've logged 30+), similar to how real rating systems calibrate a new player quickly instead of crawling toward their true level over dozens of games.
