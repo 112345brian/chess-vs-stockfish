@@ -59,24 +59,34 @@ Pages.
 The browser game is fully self-contained and needs none of this. But if
 you use [Claude Code](https://claude.com/claude-code) and want to paste a
 PGN or a position (via the game's "Look up in chat" button) for real
-master-database stats and engine-verified analysis, `setup/install-macos.sh`
-installs a local `chess-mcp` MCP server (a *different*, native Stockfish +
-Homebrew setup) and registers it with Claude Code:
+master-database stats and engine-verified analysis, `setup/install.sh`
+installs a local `chess-mcp` MCP server (a *different*, native Stockfish
+setup) and registers it with Claude Code:
 
 ```bash
-bash setup/install-macos.sh
+bash setup/install.sh
 ```
 
-This needs Homebrew, [nvm](https://github.com/nvm-sh/nvm), and the
-`claude` CLI already installed. It's a bit more involved than a plain
-`npm install -g chess-mcp` because that package's `canvas` dependency
-doesn't build against modern Node — see the comments in the script.
+It detects your OS and runs the matching script:
 
-## Raycast
+| Platform | Script | Requires |
+|---|---|---|
+| macOS | `install-macos.sh` | Homebrew, [nvm](https://github.com/nvm-sh/nvm), `claude` CLI |
+| Linux (Debian/Ubuntu) | `install-linux.sh` | apt, sudo, [nvm](https://github.com/nvm-sh/nvm), `claude` CLI |
+| Windows | — | Use WSL2 (Ubuntu) and run `install.sh` inside it |
 
-Add `raycast/` (or wherever you clone this repo) as a Script Commands
-directory in Raycast's settings, then run "Chess" — it prompts Resume or
-New Game and opens the live URL above.
+Native Windows isn't supported directly — `chess-mcp`'s `canvas` dependency
+needs a full Cairo/Pango/GTK build toolchain that's painful outside
+Linux/macOS, so WSL2 is the path there. This is all more involved than a
+plain `npm install -g chess-mcp` because that package's `canvas` dependency
+doesn't build against modern Node — see the comments in the scripts.
+
+## Raycast (macOS only)
+
+[Raycast](https://raycast.com) is macOS-only. Add `raycast/` (or wherever
+you clone this repo) as a Script Commands directory in Raycast's settings,
+then run "Chess" — it prompts Resume or New Game and opens the live URL
+above. On other platforms, just bookmark the URL directly.
 
 ## Licensing
 
