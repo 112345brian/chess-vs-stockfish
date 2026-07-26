@@ -330,8 +330,10 @@
         <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Opening</div>
         <div id="opening-name" style="font-family:var(--serif); font-size:0.95rem; margin-bottom:4px;">Starting position</div>
         <div class="hint" id="opening-eco"></div>
+        <button id="btn-opening-info" style="width:100%; margin-top:10px; display:none;">Read more &darr;</button>
+        <div id="opening-info-panel" class="hint" style="margin-top:8px; display:none; line-height:1.5;"></div>
         <button id="btn-lookup" style="width:100%; margin-top:10px;">Look up in chat &rarr;</button>
-        <p class="hint" style="margin-top:8px;">Names known lines offline. For master-game stats and engine-verified best replies, look this position up in chat &mdash; the artifact can&rsquo;t reach the internet itself.</p>
+        <p class="hint" style="margin-top:8px;">Names known lines offline, with brief background on the ~130 most common families. For master-game stats and engine-verified best replies, look this position up in chat &mdash; the artifact can&rsquo;t reach the internet itself.</p>
       </div>
 
       <div class="panel">
@@ -354,6 +356,10 @@ __STOCKFISH_SOURCE__
 
 <script id="openings-data" type="application/json">
 __OPENINGS_SOURCE__
+</script>
+
+<script id="opening-info-data" type="application/json">
+__OPENING_INFO_SOURCE__
 </script>
 
 <script>
@@ -387,6 +393,26 @@ __OPENINGS_SOURCE__
     for (let len = hist.length; len > 0; len--) {
       const hit = openingsByLine.get(hist.slice(0, len).join(' '));
       if (hit) return hit;
+    }
+    return null;
+  }
+
+  // --- Opening background blurbs (~130 major families; keyed by the part of
+  // the name before any ":"/",", matched exactly or as a prefix so variants
+  // like "X Accepted"/"X, with Y" share their parent family's write-up) ---
+  let openingInfo = {};
+  let openingInfoKeysByLength = [];
+  try {
+    openingInfo = JSON.parse(document.getElementById('opening-info-data').textContent);
+    openingInfoKeysByLength = Object.keys(openingInfo).sort((a, b) => b.length - a.length);
+  } catch (e) { console.error('Failed to parse opening info data', e); }
+
+  function openingBlurb(fullName) {
+    if (!fullName) return null;
+    const base = fullName.split(':')[0].trim();
+    if (openingInfo[base]) return openingInfo[base];
+    for (const key of openingInfoKeysByLength) {
+      if (base === key || base.startsWith(key + ' ') || base.startsWith(key + ',')) return openingInfo[key];
     }
     return null;
   }
@@ -590,6 +616,20 @@ __OPENINGS_SOURCE__
     const hit = currentOpening();
     document.getElementById('opening-name').textContent = hit ? hit.name : 'Unnamed position';
     document.getElementById('opening-eco').textContent = hit ? ('ECO ' + hit.eco) : 'Not in the offline book — try "Look up in chat".';
+
+    const blurb = hit ? openingBlurb(hit.name) : null;
+    const infoBtn = document.getElementById('btn-opening-info');
+    const infoPanel = document.getElementById('opening-info-panel');
+    infoPanel.style.display = 'none';
+    infoPanel.textContent = '';
+    infoBtn.textContent = 'Read more ↓';
+    if (blurb) {
+      infoBtn.style.display = '';
+      infoBtn.dataset.blurb = blurb;
+    } else {
+      infoBtn.style.display = 'none';
+      delete infoBtn.dataset.blurb;
+    }
   }
 
   function renderMoveList() {
@@ -782,6 +822,20 @@ __OPENINGS_SOURCE__
       toast('PGN copied — paste it in chat for analysis');
     } catch (e) {
       toast('Copy failed — select the PGN manually');
+    }
+  });
+
+  document.getElementById('btn-opening-info').addEventListener('click', () => {
+    const infoBtn = document.getElementById('btn-opening-info');
+    const infoPanel = document.getElementById('opening-info-panel');
+    const isOpen = infoPanel.style.display !== 'none';
+    if (isOpen) {
+      infoPanel.style.display = 'none';
+      infoBtn.textContent = 'Read more ↓';
+    } else {
+      infoPanel.textContent = infoBtn.dataset.blurb || '';
+      infoPanel.style.display = '';
+      infoBtn.textContent = 'Hide ↑';
     }
   });
 

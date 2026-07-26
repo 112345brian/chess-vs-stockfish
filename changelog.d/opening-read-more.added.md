@@ -1,0 +1,1 @@
+A "Read more" panel under the opening name, with hand-written background (name origin, aggressive/positional character, general reputation) for ~130 major opening families, covering the large majority of lines actually reached in play.

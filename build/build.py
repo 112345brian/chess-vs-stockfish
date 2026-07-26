@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 VENDOR = ROOT / "build" / "vendor"
 DIST = ROOT / "dist"
+OPENING_INFO = ROOT / "build" / "opening_info.json"
 
 
 def load_openings():
@@ -30,17 +31,22 @@ def main():
     chessjs = (VENDOR / "chess.mjs").read_text(encoding="utf-8")
     stockfish = (VENDOR / "stockfish.js").read_text(encoding="utf-8")
     openings = json.dumps(load_openings(), ensure_ascii=False, separators=(",", ":"))
+    opening_info = json.dumps(
+        json.loads(OPENING_INFO.read_text(encoding="utf-8")), ensure_ascii=False, separators=(",", ":")
+    )
 
     # These get embedded inside <script type="text/plain">/<script type="application/json">
     # blocks, never executed as HTML, so only a literal "</script" sequence needs escaping.
     chessjs = chessjs.replace("</script", "<\\/script")
     stockfish = stockfish.replace("</script", "<\\/script")
     openings = openings.replace("</script", "<\\/script")
+    opening_info = opening_info.replace("</script", "<\\/script")
 
     out = (
         shell.replace("__CHESSJS_SOURCE__", chessjs)
         .replace("__STOCKFISH_SOURCE__", stockfish)
         .replace("__OPENINGS_SOURCE__", openings)
+        .replace("__OPENING_INFO_SOURCE__", opening_info)
     )
 
     DIST.mkdir(exist_ok=True)
