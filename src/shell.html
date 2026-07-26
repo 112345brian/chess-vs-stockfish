@@ -1,0 +1,820 @@
+<meta charset="utf-8">
+<title>Chess vs. Stockfish</title>
+<style>
+  :root {
+    --ink-900: #171b22;
+    --ink-600: #4a5160;
+    --ink-400: #767d8c;
+    --paper-050: #ece4d2;
+    --paper-100: #ded2b6;
+    --paper-200: #cabf9f;
+    --board-light: #efe3c8;
+    --board-dark: #7a5636;
+    --brass: #9c7a1f;
+    --brass-ink: #5c4712;
+    --felt: #2f6b4f;
+    --danger: #9c3b3b;
+    --radius: 6px;
+    --serif: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", Cambria, serif;
+    --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink-900: #ece7db;
+      --ink-600: #b7b0a0;
+      --ink-400: #837c6d;
+      --paper-050: #14171d;
+      --paper-100: #1c2029;
+      --paper-200: #262b36;
+      --board-light: #c9b98c;
+      --board-dark: #5b3f26;
+      --brass: #d4a93b;
+      --brass-ink: #ecd28a;
+      --felt: #4c9770;
+      --danger: #c15454;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink-900: #ece7db;
+    --ink-600: #b7b0a0;
+    --ink-400: #837c6d;
+    --paper-050: #14171d;
+    --paper-100: #1c2029;
+    --paper-200: #262b36;
+    --board-light: #c9b98c;
+    --board-dark: #5b3f26;
+    --brass: #d4a93b;
+    --brass-ink: #ecd28a;
+    --felt: #4c9770;
+    --danger: #c15454;
+  }
+  :root[data-theme="light"] {
+    --ink-900: #171b22;
+    --ink-600: #4a5160;
+    --ink-400: #767d8c;
+    --paper-050: #ece4d2;
+    --paper-100: #ded2b6;
+    --paper-200: #cabf9f;
+    --board-light: #efe3c8;
+    --board-dark: #7a5636;
+    --brass: #9c7a1f;
+    --brass-ink: #5c4712;
+    --felt: #2f6b4f;
+    --danger: #9c3b3b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--paper-050);
+    color: var(--ink-900);
+    font-family: var(--sans);
+    min-height: 100%;
+  }
+  body {
+    padding: 28px 20px 48px;
+    display: flex;
+    justify-content: center;
+  }
+  .room {
+    width: 100%;
+    max-width: 980px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--paper-200);
+    padding-bottom: 14px;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 1.7rem;
+    margin: 0;
+    letter-spacing: 0.01em;
+    text-wrap: balance;
+  }
+  .tagline {
+    font-size: 0.85rem;
+    color: var(--ink-600);
+    font-style: italic;
+  }
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .board-frame {
+    background: linear-gradient(160deg, var(--board-dark), color-mix(in srgb, var(--board-dark) 80%, black));
+    padding: 14px;
+    border-radius: 10px;
+    box-shadow: 0 10px 30px -12px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    aspect-ratio: 1;
+    width: 100%;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .sq {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    cursor: pointer;
+    user-select: none;
+  }
+  .sq.light { background: var(--board-light); }
+  .sq.dark { background: var(--board-dark); }
+  .sq .coord {
+    position: absolute;
+    top: 2px;
+    left: 3px;
+    font-size: 0.55rem;
+    font-family: var(--mono);
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .sq.selected { box-shadow: inset 0 0 0 3px var(--brass); }
+  .sq.last-move { box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--felt) 70%, transparent); }
+  .sq.legal::after {
+    content: "";
+    position: absolute;
+    width: 26%;
+    height: 26%;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--felt) 55%, transparent);
+  }
+  .sq.legal.capture::after {
+    width: 86%;
+    height: 86%;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--danger) 65%, transparent);
+  }
+  .sq.check { box-shadow: inset 0 0 0 3px var(--danger); }
+  .piece {
+    font-size: min(7vw, 52px);
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0,0,0,0.35));
+    transition: transform 120ms ease;
+  }
+  .piece.white { color: #f6f0e2; -webkit-text-stroke: 0.5px #2a2a2a; }
+  .piece.black { color: #1b1b1b; }
+
+  aside {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .panel {
+    background: var(--paper-100);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 5px 11px;
+    border-radius: 999px;
+    background: var(--paper-200);
+    color: var(--ink-900);
+  }
+  .status-pill.thinking { background: color-mix(in srgb, var(--brass) 25%, var(--paper-200)); color: var(--brass-ink); }
+  .status-pill.over { background: color-mix(in srgb, var(--danger) 20%, var(--paper-200)); color: var(--danger); }
+  .status-pill.you { background: color-mix(in srgb, var(--felt) 22%, var(--paper-200)); }
+  .status-pill .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: currentColor;
+  }
+  .status-pill.thinking .dot { animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  @media (prefers-reduced-motion: reduce) { .status-pill.thinking .dot { animation: none; } }
+
+  .movelist {
+    font-family: var(--mono);
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    max-height: 220px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 2em 1fr 1fr;
+    gap: 2px 8px;
+    padding-right: 4px;
+  }
+  .movelist .n { color: var(--ink-400); text-align: right; }
+  .movelist .empty { grid-column: 1 / -1; color: var(--ink-400); font-family: var(--sans); font-style: italic; font-size: 0.8rem; }
+
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  label.field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--ink-600);
+    flex: 1;
+  }
+  select, button {
+    font-family: var(--sans);
+    font-size: 0.85rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--paper-200);
+    background: var(--paper-050);
+    color: var(--ink-900);
+    padding: 7px 10px;
+    cursor: pointer;
+  }
+  button:focus-visible, select:focus-visible, .sq:focus-visible {
+    outline: 2px solid var(--brass);
+    outline-offset: 1px;
+  }
+  button.primary {
+    background: var(--brass);
+    color: #201a08;
+    border-color: transparent;
+    font-weight: 600;
+  }
+  button.primary:hover { filter: brightness(1.05); }
+  button:hover { background: var(--paper-200); }
+  button.primary:hover { filter: brightness(1.06); }
+
+  .hint {
+    font-size: 0.72rem;
+    color: var(--ink-400);
+    line-height: 1.4;
+  }
+  .toast {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink-900);
+    color: var(--paper-050);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+  }
+  .toast.show { opacity: 1; }
+</style>
+
+<div class="room">
+  <header>
+    <div>
+      <h1>Chess vs. Stockfish</h1>
+      <div class="tagline">You play white. The engine runs entirely in your browser.</div>
+    </div>
+    <span class="status-pill you" id="status-pill"><span class="dot"></span><span id="status-text">Loading engine&hellip;</span></span>
+  </header>
+
+  <main>
+    <div class="board-frame">
+      <div class="board" id="board" role="grid" aria-label="Chess board"></div>
+    </div>
+
+    <aside>
+      <div class="panel">
+        <div class="row" style="margin-bottom:10px;">
+          <label class="field">
+            Opponent
+            <select id="strength">
+              <option value="adaptive" selected>Adaptive — learns your level</option>
+              <option value="800">Beginner (~800)</option>
+              <option value="1000">Novice (~1000)</option>
+              <option value="1200">Casual (~1200)</option>
+              <option value="1400">Improving (~1400)</option>
+              <option value="1600">Club (~1600)</option>
+              <option value="1800">Strong club (~1800)</option>
+              <option value="2000">Expert (~2000)</option>
+              <option value="2200">Candidate master (~2200)</option>
+              <option value="2400">Master (~2400)</option>
+              <option value="2600">Full strength (~2600+)</option>
+            </select>
+          </label>
+        </div>
+        <div class="hint" id="rating-display" style="margin-bottom:10px;"></div>
+        <div class="row">
+          <button class="primary" id="btn-new" style="flex:1;">New game</button>
+          <button id="btn-undo" style="flex:1;">Undo</button>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button id="btn-flip" style="flex:1;">Flip board</button>
+          <button id="btn-pgn" style="flex:1;">Copy PGN</button>
+        </div>
+        <p class="hint" style="margin-top:10px;">Your progress autosaves in this browser. Reopen this page anytime to resume &mdash; or open with <code>?new=1</code> to start fresh.</p>
+      </div>
+
+      <div class="panel">
+        <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Opening</div>
+        <div id="opening-name" style="font-family:var(--serif); font-size:0.95rem; margin-bottom:4px;">Starting position</div>
+        <div class="hint" id="opening-eco"></div>
+        <button id="btn-lookup" style="width:100%; margin-top:10px;">Look up in chat &rarr;</button>
+        <p class="hint" style="margin-top:8px;">Names known lines offline. For master-game stats and engine-verified best replies, look this position up in chat &mdash; the artifact can&rsquo;t reach the internet itself.</p>
+      </div>
+
+      <div class="panel">
+        <div style="font-size:0.75rem; color:var(--ink-600); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:8px;">Moves</div>
+        <div class="movelist" id="movelist"><div class="empty">No moves yet &mdash; make the first one.</div></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script id="chessjs-src" type="text/plain">
+__CHESSJS_SOURCE__
+</script>
+
+<script id="stockfish-src" type="text/plain">
+__STOCKFISH_SOURCE__
+</script>
+
+<script id="openings-data" type="application/json">
+__OPENINGS_SOURCE__
+</script>
+
+<script>
+(async function () {
+  "use strict";
+
+  // Load chess.js as a real ES module from a Blob URL (class/let/const
+  // declarations from eval() don't persist outside that eval call, so
+  // eval-ing the source directly doesn't work here).
+  const chessSrc = document.getElementById('chessjs-src').textContent;
+  const chessBlobUrl = URL.createObjectURL(new Blob([chessSrc], { type: 'text/javascript' }));
+  const { Chess } = await import(chessBlobUrl);
+
+  const PIECE_GLYPH = {
+    p: '♟', n: '♞', b: '♝', r: '♜', q: '♛', k: '♚'
+  };
+  const FILES = ['a','b','c','d','e','f','g','h'];
+  const STORAGE_KEY = 'chess-vs-stockfish:v1';
+
+  // --- Opening book (offline names only; see #btn-lookup for live theory) ---
+  const openingsByLine = new Map();
+  try {
+    const rows = JSON.parse(document.getElementById('openings-data').textContent);
+    for (const [eco, name, moves] of rows) {
+      openingsByLine.set(moves.join(' '), { eco, name });
+    }
+  } catch (e) { console.error('Failed to parse openings data', e); }
+
+  function currentOpening() {
+    const hist = game.history();
+    for (let len = hist.length; len > 0; len--) {
+      const hit = openingsByLine.get(hist.slice(0, len).join(' '));
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  const boardEl = document.getElementById('board');
+  const statusPill = document.getElementById('status-pill');
+  const statusText = document.getElementById('status-text');
+  const movelistEl = document.getElementById('movelist');
+  const strengthEl = document.getElementById('strength');
+  const toastEl = document.getElementById('toast');
+
+  let game = new Chess();
+  let flipped = false;
+  let selected = null;
+  let legalTargets = [];
+  let playerColor = 'w';
+  let engineReady = false;
+  let engineThinking = false;
+  let gameOver = false;
+  let ratingApplied = false;
+
+  // --- Adaptive rating ---
+  // This engine build has no true UCI_Elo option, only a 0-20 "Skill Level"
+  // knob, so Elo numbers here are an approximate calibration onto that scale
+  // (community-sourced estimates), not a certified rating.
+  const RATING_KEY = 'chess-vs-stockfish:rating:v1';
+  const ADAPTIVE_OFFSET = 100; // engine plays ~100 Elo above your estimate —
+  // a moderate gap (not dead-equal) is the level shown to accelerate learning:
+  // hard enough to punish real mistakes, not so hard games are just blowouts.
+  const ELO_SKILL_TABLE = [
+    [800, 0], [1000, 2], [1100, 3], [1200, 4], [1300, 6], [1400, 8],
+    [1500, 10], [1600, 12], [1700, 14], [1800, 15], [1900, 16], [2000, 17],
+    [2100, 18], [2300, 19], [2600, 20]
+  ];
+
+  let rating = { elo: 1200 };
+  try {
+    const raw = localStorage.getItem(RATING_KEY);
+    if (raw) rating = JSON.parse(raw);
+  } catch (e) {}
+
+  function saveRating() {
+    try { localStorage.setItem(RATING_KEY, JSON.stringify(rating)); } catch (e) {}
+  }
+
+  function eloToSkill(elo) {
+    const table = ELO_SKILL_TABLE;
+    if (elo <= table[0][0]) return table[0][1];
+    if (elo >= table[table.length - 1][0]) return table[table.length - 1][1];
+    for (let i = 0; i < table.length - 1; i++) {
+      const [e0, s0] = table[i], [e1, s1] = table[i + 1];
+      if (elo >= e0 && elo <= e1) {
+        const t = (elo - e0) / (e1 - e0);
+        return Math.round(s0 + t * (s1 - s0));
+      }
+    }
+    return 20;
+  }
+
+  function currentOpponentElo() {
+    if (strengthEl.value === 'adaptive') return rating.elo + ADAPTIVE_OFFSET;
+    return parseInt(strengthEl.value, 10);
+  }
+
+  function updateRatingDisplay() {
+    const el = document.getElementById('rating-display');
+    if (strengthEl.value === 'adaptive') {
+      el.textContent = 'Your estimated rating: ' + Math.round(rating.elo) +
+        '. The engine plays around ' + Math.round(rating.elo + ADAPTIVE_OFFSET) +
+        ' — updates after each finished game.';
+    } else {
+      el.textContent = 'Fixed opponent strength — rating tracking is paused.';
+    }
+  }
+
+  function applyAdaptiveResult() {
+    if (strengthEl.value !== 'adaptive') return;
+    let actual;
+    if (game.isCheckmate()) {
+      actual = (game.turn() !== playerColor) ? 1 : 0;
+    } else if (game.isDraw() || game.isStalemate() || game.isThreefoldRepetition()) {
+      actual = 0.5;
+    } else {
+      return;
+    }
+    const opponentElo = rating.elo + ADAPTIVE_OFFSET;
+    const expected = 1 / (1 + Math.pow(10, (opponentElo - rating.elo) / 400));
+    const K = 32;
+    rating.elo = Math.max(600, Math.min(2800, rating.elo + K * (actual - expected)));
+    saveRating();
+    updateRatingDisplay();
+    toast('Rating updated: ' + Math.round(rating.elo));
+  }
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toastEl.classList.remove('show'), 1800);
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ pgn: game.pgn(), flipped, strength: strengthEl.value }));
+    } catch (e) {}
+  }
+
+  function loadSaved() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (data.pgn) {
+        const g = new Chess();
+        g.loadPgn(data.pgn);
+        game = g;
+        flipped = !!data.flipped;
+        if (data.strength) strengthEl.value = data.strength;
+        return true;
+      }
+    } catch (e) {}
+    return false;
+  }
+
+  function squareEl(square) {
+    return boardEl.querySelector('[data-square="' + square + '"]');
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    const board = game.board(); // 8x8, rank 8 -> rank 1
+    const ranks = [0,1,2,3,4,5,6,7];
+    const displayRanks = flipped ? ranks.slice().reverse() : ranks;
+    const displayFiles = flipped ? FILES.slice().reverse() : FILES;
+
+    const lastMove = game.history({ verbose: true }).slice(-1)[0];
+    const inCheckColor = game.inCheck() ? game.turn() : null;
+    let kingSquareInCheck = null;
+    if (inCheckColor) {
+      for (const row of board) for (const cell of row) {
+        if (cell && cell.type === 'k' && cell.color === inCheckColor) kingSquareInCheck = cell.square;
+      }
+    }
+
+    displayRanks.forEach((rankIdx, rowPos) => {
+      displayFiles.forEach((file, colPos) => {
+        const rank = 8 - rankIdx;
+        const square = file + rank;
+        const cell = board[rankIdx][FILES.indexOf(file)];
+        const isLight = (FILES.indexOf(file) + rankIdx) % 2 === 0;
+        const div = document.createElement('div');
+        div.className = 'sq ' + (isLight ? 'light' : 'dark');
+        div.dataset.square = square;
+        div.setAttribute('role', 'gridcell');
+        div.tabIndex = 0;
+
+        if (colPos === 0) {
+          const c = document.createElement('span');
+          c.className = 'coord';
+          c.textContent = rank;
+          div.appendChild(c);
+        }
+
+        if (cell) {
+          const p = document.createElement('span');
+          p.className = 'piece ' + (cell.color === 'w' ? 'white' : 'black');
+          p.textContent = PIECE_GLYPH[cell.type];
+          div.appendChild(p);
+        }
+
+        if (lastMove && (lastMove.from === square || lastMove.to === square)) {
+          div.classList.add('last-move');
+        }
+        if (kingSquareInCheck === square) {
+          div.classList.add('check');
+        }
+        if (selected === square) {
+          div.classList.add('selected');
+        }
+        const legal = legalTargets.find(m => m.to === square);
+        if (legal) {
+          div.classList.add('legal');
+          if (legal.captured || legal.flags.includes('e')) div.classList.add('capture');
+        }
+
+        div.addEventListener('click', () => onSquareClick(square));
+        div.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSquareClick(square); }
+        });
+
+        boardEl.appendChild(div);
+      });
+    });
+
+    renderMoveList();
+    renderStatus();
+    renderOpening();
+  }
+
+  function renderOpening() {
+    const hit = currentOpening();
+    document.getElementById('opening-name').textContent = hit ? hit.name : 'Unnamed position';
+    document.getElementById('opening-eco').textContent = hit ? ('ECO ' + hit.eco) : 'Not in the offline book — try "Look up in chat".';
+  }
+
+  function renderMoveList() {
+    const hist = game.history();
+    if (!hist.length) {
+      movelistEl.innerHTML = '<div class="empty">No moves yet &mdash; make the first one.</div>';
+      return;
+    }
+    let html = '';
+    for (let i = 0; i < hist.length; i += 2) {
+      const n = i / 2 + 1;
+      const w = hist[i] || '';
+      const b = hist[i + 1] || '';
+      html += '<div class="n">' + n + '.</div><div>' + w + '</div><div>' + b + '</div>';
+    }
+    movelistEl.innerHTML = html;
+    movelistEl.scrollTop = movelistEl.scrollHeight;
+  }
+
+  function renderStatus() {
+    statusPill.classList.remove('thinking', 'over', 'you');
+    if (gameOver) {
+      statusPill.classList.add('over');
+      let msg = 'Game over';
+      if (game.isCheckmate()) msg = (game.turn() === 'w' ? 'Black' : 'White') + ' wins by checkmate';
+      else if (game.isStalemate()) msg = 'Draw by stalemate';
+      else if (game.isDraw()) msg = 'Draw';
+      statusText.textContent = msg;
+      return;
+    }
+    if (!engineReady) {
+      statusText.textContent = 'Loading engine…';
+      return;
+    }
+    if (engineThinking) {
+      statusPill.classList.add('thinking');
+      statusText.textContent = 'Stockfish is thinking…';
+      return;
+    }
+    statusPill.classList.add('you');
+    statusText.textContent = game.inCheck() ? 'Your move — you’re in check' : 'Your move';
+  }
+
+  function onSquareClick(square) {
+    if (gameOver || engineThinking || game.turn() !== playerColor) return;
+
+    if (selected) {
+      const move = legalTargets.find(m => m.to === square);
+      if (move) {
+        makePlayerMove(selected, square, move);
+        return;
+      }
+    }
+
+    const piece = game.get(square);
+    if (piece && piece.color === playerColor) {
+      selected = square;
+      legalTargets = game.moves({ square, verbose: true });
+      render();
+    } else {
+      selected = null;
+      legalTargets = [];
+      render();
+    }
+  }
+
+  function makePlayerMove(from, to, move) {
+    let promotion;
+    if (move.flags.includes('p')) promotion = 'q';
+    try {
+      game.move({ from, to, promotion });
+    } catch (e) {
+      selected = null; legalTargets = []; render();
+      return;
+    }
+    selected = null;
+    legalTargets = [];
+    save();
+    render();
+    checkGameOver();
+    if (!gameOver) requestEngineMove();
+  }
+
+  function checkGameOver() {
+    if (game.isGameOver()) {
+      gameOver = true;
+      if (!ratingApplied) {
+        ratingApplied = true;
+        applyAdaptiveResult();
+      }
+      render();
+      return true;
+    }
+    gameOver = false;
+    return false;
+  }
+
+  // --- Stockfish worker ---
+  let engine = null;
+  let engineQueue = [];
+
+  function initEngine() {
+    const src = document.getElementById('stockfish-src').textContent;
+    const blob = new Blob([src], { type: 'application/javascript' });
+    engine = new Worker(URL.createObjectURL(blob));
+    engine.onmessage = (e) => {
+      const line = typeof e.data === 'string' ? e.data : '';
+      if (line === 'uciok') {
+        engine.postMessage('isready');
+      } else if (line === 'readyok') {
+        engineReady = true;
+        renderStatus();
+        if (engineQueue.length) { const fn = engineQueue.shift(); fn(); }
+      } else if (line.startsWith('bestmove')) {
+        const parts = line.split(' ');
+        const uciMove = parts[1];
+        applyEngineMove(uciMove);
+      }
+    };
+    engine.onerror = (err) => {
+      statusText.textContent = 'Engine failed to load';
+      console.error('Stockfish worker error', err);
+    };
+    engine.postMessage('uci');
+  }
+
+  function applyEngineMove(uciMove) {
+    engineThinking = false;
+    if (!uciMove || uciMove === '(none)') { checkGameOver(); renderStatus(); return; }
+    const from = uciMove.slice(0, 2);
+    const to = uciMove.slice(2, 4);
+    const promotion = uciMove.length > 4 ? uciMove[4] : undefined;
+    try {
+      game.move({ from, to, promotion });
+    } catch (e) {
+      console.error('Engine move rejected', uciMove, e);
+    }
+    save();
+    render();
+    checkGameOver();
+  }
+
+  function requestEngineMove() {
+    if (!engine) return;
+    engineThinking = true;
+    renderStatus();
+    const targetElo = currentOpponentElo();
+    const skill = eloToSkill(targetElo);
+    const movetime = Math.round(150 + skill * 45);
+    const run = () => {
+      engine.postMessage('setoption name Skill Level value ' + skill);
+      engine.postMessage('position fen ' + game.fen());
+      engine.postMessage('go movetime ' + movetime);
+    };
+    if (engineReady) run(); else engineQueue.push(run);
+  }
+
+  // --- Controls ---
+  document.getElementById('btn-new').addEventListener('click', () => {
+    game = new Chess();
+    selected = null; legalTargets = []; gameOver = false; ratingApplied = false;
+    save();
+    render();
+  });
+
+  document.getElementById('btn-undo').addEventListener('click', () => {
+    if (engineThinking) return;
+    game.undo(); // undo engine move
+    game.undo(); // undo player move
+    selected = null; legalTargets = []; gameOver = false; ratingApplied = false;
+    save();
+    render();
+  });
+
+  strengthEl.addEventListener('change', () => {
+    updateRatingDisplay();
+    save();
+  });
+
+  document.getElementById('btn-flip').addEventListener('click', () => {
+    flipped = !flipped;
+    save();
+    render();
+  });
+
+  document.getElementById('btn-pgn').addEventListener('click', async () => {
+    const pgn = game.pgn();
+    try {
+      await navigator.clipboard.writeText(pgn);
+      toast('PGN copied — paste it in chat for analysis');
+    } catch (e) {
+      toast('Copy failed — select the PGN manually');
+    }
+  });
+
+  document.getElementById('btn-lookup').addEventListener('click', async () => {
+    const hit = currentOpening();
+    const label = hit ? (hit.name + ' (ECO ' + hit.eco + ')') : 'this position (not in the offline book)';
+    const prompt = 'Look up master games and the best replies for ' + label +
+      '.\nFEN: ' + game.fen() +
+      (game.history().length ? '\nMoves so far: ' + game.history().join(' ') : '');
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast('Copied — paste it in chat');
+    } catch (e) {
+      toast('Copy failed — select the text manually');
+    }
+  });
+
+  // --- Boot ---
+  const params = new URLSearchParams(location.search);
+  if (params.get('new') === '1') {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+    history.replaceState(null, '', location.pathname);
+  } else {
+    loadSaved();
+  }
+
+  checkGameOver();
+  updateRatingDisplay();
+  render();
+  initEngine();
+
+  if (!gameOver && game.turn() !== playerColor) {
+    requestEngineMove();
+  }
+})();
+</script>
