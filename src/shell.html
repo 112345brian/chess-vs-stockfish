@@ -364,7 +364,10 @@
         <div id="calibration-active" style="display:none; margin-bottom:10px; padding:10px; border-radius:var(--radius); background:var(--paper-200);">
           <div class="hint" id="calibration-label" style="margin-bottom:6px;"></div>
           <div id="calibration-feedback" style="min-height:2.2em; margin-bottom:8px; line-height:1.4;"></div>
-          <button class="primary" id="btn-calibrate-next" style="width:100%;" disabled>Next</button>
+          <div class="row">
+            <button class="primary" id="btn-calibrate-next" style="flex:1;" disabled>Next</button>
+            <button id="btn-calibrate-cancel" style="flex:1;">Cancel</button>
+          </div>
         </div>
         <div class="hint" id="analysis-progress" style="margin-bottom:10px; display:none;"></div>
         <div class="row">
@@ -2272,6 +2275,7 @@ __PUZZLES_SOURCE__
   document.getElementById('btn-drill-end').addEventListener('click', endDrill);
   document.getElementById('btn-calibrate-start').addEventListener('click', startCalibration);
   document.getElementById('btn-calibrate-next').addEventListener('click', onCalibrateNextClick);
+  document.getElementById('btn-calibrate-cancel').addEventListener('click', endDrill);
 
   document.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLSelectElement || e.target instanceof HTMLInputElement) return;
